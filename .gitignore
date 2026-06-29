@@ -1,8 +1,16 @@
-# IDEs
-.idea/
+.Rproj.user
+.Rapp.history
+.Rhistory
+.RData
+.Ruserdata
+Thumbs.db
+.DS_Store
+.positai
 
-# Hugo
-/resources/
-public/
-jsconfig.json
-node_modules/
+*.png
+~$*.xlsx
+
+rjavaenv/*
+
+/.quarto/
+**/*.quarto_ipynb

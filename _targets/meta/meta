@@ -1,0 +1,20 @@
+name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iteration|parent|children|seconds|warnings|error
+intervention_window|stem|a68b5bc485a66711|3e117efdff5abe3d|2c530c1562a7fbd1|-1052276732||t20633.8540859743s|s61b|61|rds|local|vector|||1.716|package ‘duckspatial’ was built under R version 4.6.1|
+munis_sf|stem|1f73853f8751d1cc|047bf90bc649ab1a|ad15d3152b88bab6|-2128957240|data/munis_sf.parquet|t20633.8598886565s|s92325b|92325|file|local|vector|||2.477|package ‘duckspatial’ was built under R version 4.6.1|
+stations_sf|stem|4cb39fdf336564dc|9d25cea9fca112e1|6b6b72c49fd596a9|575763292|data/transit_stations.parquet|t20633.8605155536s|s32245b|32245|file|local|vector|||0.847|package ‘duckspatial’ was built under R version 4.6.1|
+metro_palette|stem|777e457fcf515202|a74098ce516c1a02|2c530c1562a7fbd1|-1796360450||t20633.8605157677s|s271b|271|rds|local|vector|||0||
+footprint_sf|stem|f9a2e53f8b5c8f0a|436f4e2c68489837|429f1c601c0c6c63|977030801|data/footprint_sf.parquet|t20633.8605620055s|s765252b|765252|file|local|vector|||3.975||
+lines_sf|stem|aeee68e95094359a|2a04dbf88cb95ecf|bea2caa6a0d42d65|284412744|data/transit_lines.parquet|t20633.8605803533s|s440691b|440691|file|local|vector|||1.578||
+sf_from_parquet|function|4de7e3a987d5bee7
+write_parquet_target|function|7441d75ab8d57397
+find_endpoints|function|115012cb9b01c015
+split_lines|function|9353464f02dca593
+plot_openings|function|8d66806a82dfa776
+plot_lines|function|f42869d7863388e7
+get_munis|function|2909ae15196be394
+tidy_transit_stations|function|c9a20624d69690b2
+get_footprint|function|6863f250a716e312
+segment_lines|function|c1074b28d99e328c
+tidy_transit_lines|function|7e425de60a608c76
+openings_plot|stem|a4aef50ce5e4033f|ddac20f39cb68916|b85d4f3e8793194b|2044056688|figures/fig_openings.png|t20633.8608014715s|s132603b|132603|file|local|vector|||0.775||
+transit_map|stem|71946df3063a7b28|489d4e513e16a0e8|9e9d87beaf4e4cdc|86306116|figures/fig_map.png|t20633.8608226926s|s1498538b|1498538|file|local|vector|||1.822||
