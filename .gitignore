@@ -11,6 +11,7 @@ Thumbs.db
 ~$*.xlsx
 
 rjavaenv/*
+data/*
 
 /.quarto/
 **/*.quarto_ipynb
