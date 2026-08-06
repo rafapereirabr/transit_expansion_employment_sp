@@ -1,14 +1,36 @@
 name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iteration|parent|children|seconds|warnings|error
 intervention_window|stem|a68b5bc485a66711|3e117efdff5abe3d|2c530c1562a7fbd1|-1052276732||t20633.8540859743s|s61b|61|rds|local|vector|||1.716|package ‘duckspatial’ was built under R version 4.6.1|
-munis_sf|stem|1f73853f8751d1cc|047bf90bc649ab1a|ad15d3152b88bab6|-2128957240|data/munis_sf.parquet|t20633.8598886565s|s92325b|92325|file|local|vector|||2.477|package ‘duckspatial’ was built under R version 4.6.1|
 stations_sf|stem|4cb39fdf336564dc|9d25cea9fca112e1|6b6b72c49fd596a9|575763292|data/transit_stations.parquet|t20633.8605155536s|s32245b|32245|file|local|vector|||0.847|package ‘duckspatial’ was built under R version 4.6.1|
 metro_palette|stem|777e457fcf515202|a74098ce516c1a02|2c530c1562a7fbd1|-1796360450||t20633.8605157677s|s271b|271|rds|local|vector|||0||
 footprint_sf|stem|f9a2e53f8b5c8f0a|436f4e2c68489837|429f1c601c0c6c63|977030801|data/footprint_sf.parquet|t20633.8605620055s|s765252b|765252|file|local|vector|||3.975||
 lines_sf|stem|aeee68e95094359a|2a04dbf88cb95ecf|bea2caa6a0d42d65|284412744|data/transit_lines.parquet|t20633.8605803533s|s440691b|440691|file|local|vector|||1.578||
+openings_plot|stem|a4aef50ce5e4033f|ddac20f39cb68916|b85d4f3e8793194b|2044056688|figures/fig_openings.png|t20633.8608014715s|s132603b|132603|file|local|vector|||0.775||
+transit_map|stem|71946df3063a7b28|489d4e513e16a0e8|9e9d87beaf4e4cdc|86306116|figures/fig_map.png|t20633.8608226926s|s1498538b|1498538|file|local|vector|||1.822||
+time_window|stem|07272ab3af4225c1|b84a9e203da1c7d9|2c530c1562a7fbd1|1186828259||t20670.807481778s|s80b|80|rds|local|vector|||1.437||
+read_cadunico|function|492f4f6c8205d727
+munis_sf|stem|b563820d7896e029|047bf90bc649ab1a|ad15d3152b88bab6|-2128957240|data/munis_sf.parquet|t20670.810807669s|s92323b|92323|file|local|vector|||7.891||
+cadunico_fam_5a09d4d33d887354|branch|1de1e45b834eb06d|e5e470fb92baf4c9|8e8cfcc5f217cf5c|4317168||t20670.8214683494s|s24275860b|24275860|parquet|local|vector|cadunico_fam||17.937||
+cadunico_fam_5f79e46a279061a7|branch|a549c157b588e305|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-1274375251||t20670.821729484s|s26476452b|26476452|parquet|local|vector|cadunico_fam||19.063||
+cadunico_fam_ba8f0b5704c1f4ee|branch|ecf7aa8e6a186d84|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-1458995418||t20670.8219537785s|s30681841b|30681841|parquet|local|vector|cadunico_fam||16.063||
+cadunico_fam_86dc0105b677219a|branch|b0824c34e904b13e|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-2069553980||t20670.8221615296s|s32176729b|32176729|parquet|local|vector|cadunico_fam||14.282||
+cadunico_fam_7d11194c00cb47c8|branch|97249adeee587af0|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-2114431452||t20670.8223763864s|s34820108b|34820108|parquet|local|vector|cadunico_fam||15.172||
+cadunico_fam_68646b8713c5c5a4|branch|b2ec554f88d80ca3|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-2031235004||t20670.8225706775s|s35614079b|35614079|parquet|local|vector|cadunico_fam||13.687||
+cadunico_fam_35a7baaf696f2a42|branch|b6b5369c0516b23f|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-745771182||t20670.8228086646s|s39770435b|39770435|parquet|local|vector|cadunico_fam||16.75||
+cadunico_fam_eb461a0165d26139|branch|d3d97e87860818ec|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-88967521||t20670.8230448737s|s39912679b|39912679|parquet|local|vector|cadunico_fam||15.859||
+cadunico_fam_0fb4d4a458f0e24a|branch|c3763c5fb353fe0c|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-742455087||t20670.8233989299s|s45394920b|45394920|parquet|local|vector|cadunico_fam||25.453||
+cadunico_fam_4967ab75fc4e6a13|branch|52ef8dd0d39f049a|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-616089834||t20670.8238291398s|s55902414b|55902414|parquet|local|vector|cadunico_fam||29.937||
+cadunico_fam_03276946ab24694d|branch|4cbd1d8e99f0bd32|e5e470fb92baf4c9|8e8cfcc5f217cf5c|1375304512||t20670.8242915166s|s57418824b|57418824|parquet|local|vector|cadunico_fam||33.375||
+cadunico_fam_2e0e1d08761008d6|branch|0f14b6d7598da361|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-231574231||t20670.8247669123s|s52732245b|52732245|parquet|local|vector|cadunico_fam||34.046||
+cadunico_fam_c745171419d368eb|branch|b93f2be6a3b041af|e5e470fb92baf4c9|8e8cfcc5f217cf5c|-938062704||t20670.8251499553s|s52668066b|52668066|parquet|local|vector|cadunico_fam||28.047||
+read_cad_fams|function|22432bb9a2c16921
+cadunico_fam_2ec048501955e671|branch|419e50841c95a1b0|5267306c84f1b3d1|283660cac6c172ec|-1741916891||t20670.8212237746s||18019699|parquet|local|vector|cadunico_fam||12.219||object 'file_name' not found
+df|object|afd77a504fc32839
 sf_from_parquet|function|4de7e3a987d5bee7
+read_cad_individs|function|822be5f7bc05a2de
 write_parquet_target|function|7441d75ab8d57397
 find_endpoints|function|115012cb9b01c015
 split_lines|function|9353464f02dca593
+read_cad_families|function|82a7bbd258a7606b
 plot_openings|function|8d66806a82dfa776
 plot_lines|function|f42869d7863388e7
 get_munis|function|2909ae15196be394
@@ -16,5 +38,4 @@ tidy_transit_stations|function|c9a20624d69690b2
 get_footprint|function|6863f250a716e312
 segment_lines|function|c1074b28d99e328c
 tidy_transit_lines|function|7e425de60a608c76
-openings_plot|stem|a4aef50ce5e4033f|ddac20f39cb68916|b85d4f3e8793194b|2044056688|figures/fig_openings.png|t20633.8608014715s|s132603b|132603|file|local|vector|||0.775||
-transit_map|stem|71946df3063a7b28|489d4e513e16a0e8|9e9d87beaf4e4cdc|86306116|figures/fig_map.png|t20633.8608226926s|s1498538b|1498538|file|local|vector|||1.822||
+cadunico_fam|stem|48343c5079b7e274|5267306c84f1b3d1|55fdaf4f292b0885|1986062403|data/temp/cad_fams.parquet|t20671.7907217904s|s368247361b|368247361|file|local|vector|||201.812||
