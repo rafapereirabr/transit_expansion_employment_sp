@@ -1,9 +1,16 @@
+# targets setup ------------------------------------------------------------------------------
+
+options(
+  arrow.pull_as_vector = FALSE,
+  arrow.unsafe_metadata = TRUE,
+  future.globals.maxSize = 1e4^1024
+)
+
 suppressPackageStartupMessages(
   {
     library(targets)
-    # library(tarchetypes)
+    library(crew)
     library(dplyr)
-    library(docstring)
     library(geoarrow)
   }
 )
@@ -19,7 +26,13 @@ tar_option_set(
     "ggplot2"
   ),
   format = "parquet",
-  workspace_on_error = T
+  controller = crew_controller_local(
+    workers = floor(.6 * parallelly::freeCores()[1])
+  ),
+  storage = "worker",
+  retrieval = "worker",
+  trust_timestamps = TRUE,
+  workspace_on_error = TRUE
 )
 
 tar_source()
@@ -27,6 +40,9 @@ tar_source()
 if (!dir.exists("data")) {
   dir.create("data")
 }
+
+
+# targets list -------------------------------------------------------------------------------
 
 list(
   ## parameters -------------------------------------------------------------------------------
@@ -96,7 +112,7 @@ list(
   ),
   tar_target(
     name = munis_sf,
-    command = get_munis(save_path = "data/munis_sf.parquet"),
+    command = get_munis(save_path = "data/munis_sf.parquet", overwrite = T),
     format = "file",
     deployment = "main"
   ),
@@ -144,6 +160,17 @@ list(
       munis = munis_sf,
       save_dir = "data/temp"
     ),
+    format = "file",
+    deployment = "main"
+  ),
+  tar_target(
+    name = cadunico_ind,
+    command = read_cad_individuals(
+      year = time_window,
+      families = cadunico_fam,
+      save_dir = "data/temp"
+    ),
+    pattern = map(time_window),
     format = "file"
   )
 )
