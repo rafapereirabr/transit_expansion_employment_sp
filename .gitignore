@@ -12,6 +12,7 @@ Thumbs.db
 
 rjavaenv/*
 data/*
+!data/station_openings.xlsx
 
 /.quarto/
 **/*.quarto_ipynb

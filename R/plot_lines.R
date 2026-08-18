@@ -1,31 +1,51 @@
 plot_lines <- function(footprint_sf, munis_sf, lines_sf, stations_sf, metro_palette, save_path) {
   ## read data --------------------------------------------------------------------------------
-  
-  footprint_sf <- sf_from_parquet(footprint_sf) |> 
+
+  footprint_sf <- sf_from_parquet(footprint_sf) |>
     st_transform(crs = 31983)
-  
-  munis_sf <- sf_from_parquet(munis_sf) |> 
-    filter(code_muni == 3550308) |> 
+
+  munis_sf <- sf_from_parquet(munis_sf) |>
+    filter(code_muni == 3550308) |>
     st_transform(crs = 31983)
-  
+
   cbd <- read_sf("data-raw/downtown.gpkg", crs = 31983)
-  
+
   lines_sf <- sf_from_parquet(lines_sf)
   stations_sf <- sf_from_parquet(stations_sf)
-  
-  
+
+  # cad <- sf_from_parquet("data/points.parquet")
+  cad <- arrow::read_parquet("data/points 1.parquet")
+  cad_h3 <- cad |>
+    # st_drop_geometry() |>
+    count(h3_09)
+  cad_h3$geometry <- h3o::h3_from_strings(cad_h3$h3_09) |>
+    st_as_sfc()
+  cad_h3 <- st_as_sf(cad_h3)
+
+
+  ## buffers and cadunico ----------------------------------------------------------------------
+  buffers <- filter(stations_sf, era != "Future" | status == "Under Construction") |>
+    group_by(era) |>
+    summarise(geometry = st_union(geometry)) |>
+    st_buffer(1000) |>
+    st_difference()
+
+  cad_buf <- cad_h3 |> st_transform(crs = st_crs(buffers)) |> st_join(buffers)
+  cad_buf <- cad_buf |> filter(!is.na(era)) # & era != "Pre-2013"
+
+
   ## base map - city limits and stuff ---------------------------------------------------------
-  metro_bbox <- stations_sf |> 
+  metro_bbox <- stations_sf |>
     filter(
-      !(code_line %in% c(7,11)) | 
+      !(code_line %in% c(7,11)) |
         name_station %in% c("CAIEIRAS")
     )
-  
+
   pal <- metro_palette
   pal <- c("Pre-2013" = "gray75", pal)
   # pal <- factor(pal)
-  
-  base_map <- ggplot() + 
+
+  base_map <- ggplot() +
     geom_sf(data = footprint_sf, color = NA, fill = "#f2eddc") +
     geom_sf(
       data = munis_sf,
@@ -34,15 +54,22 @@ plot_lines <- function(footprint_sf, munis_sf, lines_sf, stations_sf, metro_pale
       fill = NA,
       linewidth = 0.375
     ) +
+    # geom_sf(data = cad_buf, color = NA, aes(fill = n)) +
     geom_sf(data = cbd, aes(linetype = "Expanded Downtown"), color = "red", fill = NA) +
     scale_linetype_manual(
-      values = c("Municipal borders" = "dotted", "Expanded Downtown" = "dotdash", 
+      values = c("Municipal borders" = "dotted", "Expanded Downtown" = "dotdash",
                  "Under Construction" = "dashed")
     )
-  
-  
+
   ## interventions
-  transit_map <- base_map +
+  buffers_map <- base_map +
+    geom_sf(
+      data = buffers,
+      color = NA, aes(fill = era), alpha = 0.4,
+      linewidth = 0.375,
+    )
+
+  transit_map <- buffers_map +
     geom_sf(
       data = filter(lines_sf, era == "Pre-2013"),
       aes(color = era),
@@ -74,18 +101,20 @@ plot_lines <- function(footprint_sf, munis_sf, lines_sf, stations_sf, metro_pale
       size = 1.5,
       key_glyph = draw_key_point
     )
-  
-  
+
+
   final_map <- transit_map +
-    labs(color = "Intervention", linetype = "") + 
+    labs(color = "Intervention", linetype = "", fill = "Households") +
     spatialops::geom_bbox(metro_bbox) +
     scale_color_manual(values = pal) +
+    # scale_fill_viridis_b(option = "viridis", breaks = c(5, 50, 500, 1500)) +
     guides(
       color = guide_legend(
         order = 1, nrow = 2,
         override.aes = list(size = 3, stroke = 0, linewidth = 0)
-      ), 
-      linetype = guide_legend(order = 2, nrow = 2)#,
+      ),
+      linetype = guide_legend(order = 2, nrow = 2),
+      fill = guide_legend(order = 3, nrow = 2)
     ) +
     spatialops::theme_abnq_map(base_size = 10) +
     theme(
@@ -93,11 +122,11 @@ plot_lines <- function(footprint_sf, munis_sf, lines_sf, stations_sf, metro_pale
       legend.title.position = "top",
       legend.box = "horizontal"
     )
-  
+
   # final_map
-  
+
   ggsave(save_path, plot = final_map, dpi = 600, width = 16, height = 13.5, un = "cm", bg = "white")
-  
+
   return(save_path)
 }
 
@@ -106,5 +135,5 @@ plot_lines <- function(footprint_sf, munis_sf, lines_sf, stations_sf, metro_pale
 
 # library(ggplot2)
 # library(sf)
-# 
+#
 # tar_load(c(footprint_sf, munis_sf, lines_sf, stations_sf, metro_palette))
