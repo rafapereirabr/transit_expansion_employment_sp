@@ -3,7 +3,11 @@
 options(
   arrow.pull_as_vector = FALSE,
   arrow.unsafe_metadata = TRUE,
-  future.globals.maxSize = 1e4^1024
+  future.globals.maxSize = 1e4^1024,
+  java.parameters = c(
+    paste0("-Xmx", 96, "G"),
+    paste0("-XX:ActiveProcessorCount=", 12)
+  )
 )
 
 suppressPackageStartupMessages(
@@ -14,6 +18,8 @@ suppressPackageStartupMessages(
     library(geoarrow)
   }
 )
+
+
 # Set target options:
 tar_option_set(
   packages = c(
@@ -23,7 +29,8 @@ tar_option_set(
     "duckspatial",
     "sf",
     "geoarrow",
-    "ggplot2"
+    "ggplot2",
+    "lwgeom"
   ),
   format = "parquet",
   controller = crew_controller_local(
@@ -81,6 +88,12 @@ list(
     format = "rds",
     deployment = "main"
   ),
+  tar_target(
+    name = cutoff_years,
+    command = range(time_window),
+    format = "rds",
+    deployment = "main"
+  ),
 
   ## shapefiles -------------------------------------------------------------------------------
   tar_target(
@@ -117,6 +130,12 @@ list(
     deployment = "main"
   ),
   tar_target(
+    name = grid_sf,
+    command = sf_from_parquet(munis_sf) |> st_buffer(1e3) |> h3_from_sf(),
+    format = "rds",
+    deployment = "main"
+  ),
+  tar_target(
     name = footprint_sf,
     command = get_footprint(
       save_path = "data/footprint_sf.parquet",
@@ -149,6 +168,58 @@ list(
       save_path = "figures/fig_openings.png"
     ),
     format = "file",
+    deployment = "main"
+  ),
+
+  ## routing --------------------------------------------------------------------------------
+  tar_target(
+    name = od_table_stations,
+    command = set_od_table_stations(
+      origins = cadunico_fam,
+      destinations = stations_sf,
+      origin_filter = grid_sf
+    ),
+    format = "rds",
+    deployment = "main"
+  ),
+  tar_target(
+    name = od_table_grid,
+    command = set_od_table_h3(grid = grid_sf),
+    format = "rds",
+    deployment = "main"
+  ),
+  tar_target(
+    name = r5_network,
+    command = build_r5r_network(dir = "data/r5"),
+    format = "file",
+    deployment = "main"
+  ),
+  tar_target(
+    name = feeds,
+    command = unpack_feeds("data-raw/feeds_sptrans.zip", "data/r5"),
+    deployment = "main",
+    format = "file"
+  ),
+  tar_target(
+    name = ttm_walk_stations,
+    command = calc_ttm(
+      r5_network = r5_network,
+      od_table = od_table_stations,
+      mode = "WALK",
+      max_duration = 180L
+    ),
+    deployment = "main"
+  ),
+  tar_target(
+    name = ttm_transit,
+    command = calc_ttm(
+      r5_network = r5_network,
+      od_table = od_table_grid,
+      mode = "TRANSIT",
+      year = cutoff_years,
+      max_duration = 60L
+    ),
+    pattern = map(cutoff_years),
     deployment = "main"
   ),
 

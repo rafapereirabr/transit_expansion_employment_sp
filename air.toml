@@ -1,0 +1,11 @@
+[format]
+line-width = 101
+indent-width = 1
+indent-style = "tab"
+line-ending = "auto"
+persistent-line-breaks = true
+assignment-style = "preserve"
+exclude = []
+default-exclude = true
+table = []
+default-table = true
