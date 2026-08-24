@@ -1,263 +1,331 @@
-# unpack_feeds -------------------------------------------------------------------------------
+# prepare feeds ------------------------------------------------------------------------------
 
-# feeds
-# feeds <- "data-raw/feeds_sptrans.zip"
-# r5_dir <- "data/r5"
+set_gtfs_service_window <- function(gtfs, start_date, end_date) {
+  start_date <- as.Date(start_date)
+  end_date <- as.Date(end_date)
+  stopifnot(!is.na(start_date), !is.na(end_date), start_date <= end_date)
+  start_value <- start_date
+  end_value <- end_date
 
-unpack_feeds <- function(feeds, r5_dir) {
-  td <- tempdir()
+  if ("calendar" %in% names(gtfs)) {
+    gtfs$calendar <- gtfs$calendar |>
+      dplyr::mutate(
+        start_date = start_value,
+        end_date = end_value
+      )
+  }
 
-  zip_files <- zip::zip_list(feeds)
+  # Keep only exceptions that actually belong to the new service window. We do
+  # not shift old holidays into another year because their weekdays/meaning may
+  # differ. The comparison dates should therefore avoid holidays.
+  if ("calendar_dates" %in% names(gtfs)) {
+    gtfs$calendar_dates <- gtfs$calendar_dates |>
+      dplyr::mutate(exception_date = as.Date(date)) |>
+      dplyr::filter(dplyr::between(exception_date, start_date, end_date)) |>
+      dplyr::select(-exception_date)
+  }
 
-  zip_files <- zip_files |>
-    filter(stringr::str_detect(filename, "2012|2025")) |>
-    pull(filename)
-
-  zip::unzip(feeds, zip_files, exdir = td)
-
-  temp_paths <- list.files(
-    td,
-    pattern = "google_transit",
-    recursive = T,
-    full.names = T
-  )
-  new_paths <- file.path(
-    r5_dir,
-    c("gtfs_sptrans_2012.zip", "gtfs_sptrans_2025.zip")
-  )
-
-  file.copy(temp_paths, new_paths)
-
-  return(new_paths)
+  gtfs
 }
 
-# validate_feeds -----------------------------------------------------------------------------
 
-# feed_paths <- c(
-#   "data/r5/gtfs_sptrans_2025.zip",
-#   "data/r5/gtfs_sptrans_2012.zip"
-# )
-# validator_dir <- "data/gtfs_validator"
+deduplicate_gtfs_stops <- function(gtfs) {
+  if (!"stops" %in% names(gtfs) || !"stop_id" %in% names(gtfs$stops)) {
+    return(list(gtfs = gtfs, removed = 0L, conflicting = 0L))
+  }
 
-# validate_feeds <- function(feed_paths, validator_dir) {
-#   if (!dir.exists(validator_dir)) {
-#     dir.create(validator_dir)
-#   }
-#   validator_path <- list.files(validator_dir, pattern = "jar$", full.names = T)[
-#     1
-#   ]
-#   if (length(validator_path) == 0) {
-#     gtfstools::download_validator(validator_dir)
-#     validator_path <- list.files(
-#       validator_dir,
-#       pattern = "jar$",
-#       full.names = T
-#     )[1]
-#   }
+  stops <- gtfs$stops
+  duplicated_id <- duplicated(stops$stop_id)
+  duplicated_rows <- stops[duplicated_id]
+  first_rows <- stops[match(duplicated_rows$stop_id, stops$stop_id)]
+  comparison_columns <- setdiff(names(stops), "stop_id")
+  conflicting <- if (nrow(duplicated_rows) == 0L) {
+    logical()
+  } else {
+    duplicate_signature <- do.call(
+      paste,
+      c(duplicated_rows[, ..comparison_columns], sep = "\r")
+    )
+    first_signature <- do.call(
+      paste,
+      c(first_rows[, ..comparison_columns], sep = "\r")
+    )
+    duplicate_signature != first_signature
+  }
 
-#   reports <- purrr::map(
-#     feed_paths,
-#     function(x) {
-#       gtfstools::validate_gtfs(
-#         x,
-#         output_path = validator_dir,
-#         validator = validator_path
-#       )
-#       html_old <- file.path(validator_dir, "report.html")
-#       html_new <- file.path(
-#         validator_dir,
-#         paste0("report_", stringr::str_remove(basename(x), "\\.zip$"), ".html")
-#       )
-#       file.copy(html_old, html_new)
-#       return(html_new)
-#     }
-#   )
+  # remove_duplicates() handles exact duplicate rows in every GTFS table. The
+  # distinct() call additionally enforces the stop_id primary key.
+  gtfs <- gtfstools::remove_duplicates(gtfs)
+  gtfs$stops <- gtfs$stops |>
+    dplyr::distinct(stop_id, .keep_all = TRUE)
 
-#   return(reports)
-# }
+  list(
+    gtfs = gtfs,
+    removed = sum(duplicated_id),
+    conflicting = sum(conflicting),
+    conflicting_stop_ids = unique(duplicated_rows$stop_id[conflicting])
+  )
+}
 
-# library(purrr)
-# library(gtfstools)
 
-# feeds <- map(feed_paths, read_gtfs)
-# names(feeds) <- c("sptrans_2012", "sptrans_2025")
-# routes <- map(feeds, ~ pluck(.x, "routes")) |>
-#   bind_rows(.id = "feed") |>
-#   select(feed, route_type, route_id)
-# trips <- map(feeds, ~ pluck(.x, "trips")) |>
-#   bind_rows(.id = "feed") |>
-#   select(feed, route_id, trip_id)
-# speeds <- map(feeds, get_trip_speed) |> bind_rows(.id = "feed")
+drop_gtfs_shape_distances <- function(gtfs) {
+  changed <- character()
+  for (table in c("shapes", "stop_times")) {
+    if (table %in% names(gtfs) && "shape_dist_traveled" %in% names(gtfs[[table]])) {
+      gtfs[[table]] <- gtfs[[table]] |>
+        dplyr::select(-shape_dist_traveled)
+      changed <- c(changed, paste0(table, ".txt"))
+    }
+  }
+  list(gtfs = gtfs, changed = changed)
+}
 
-# full <- full_join(speeds, trips) |>
-#   full_join(routes)
 
-# full |>
-#   mutate(active = if_else(is.na(trip_id), 0, 1)) |>
-#   summarise(
-#     n_routes = n_distinct(route_id),
-#     n_trips = n_distinct(trip_id),
-#     n_trips_active = sum(!is.na(trip_id)),
-#     avg_speed = mean(speed, na.rm = T),
-#     speed_q1 = quantile(speed, 0.25, na.rm = T),
-#     speed_q2 = quantile(speed, 0.5, na.rm = T),
-#     speed_q3 = quantile(speed, 0.75, na.rm = T),
-#     speed_q4 = quantile(speed, 1, na.rm = T),
-#     .by = c(feed, route_type)
-#   )
+prepare_gtfs_feed <- function(
+  input,
+  output,
+  service_start,
+  service_end,
+  deduplicate_stops = FALSE,
+  drop_shape_distances = TRUE,
+  overwrite = TRUE
+) {
+  stopifnot(file.exists(input))
+  if (file.exists(output) && !overwrite) {
+    return(normalizePath(output))
+  }
 
-# library(ggplot2)
-# full |>
-#   filter(!is.infinite(speed)) |>
-#   ggplot() +
-#   geom_density(aes(x = speed, color = feed)) +
-#   facet_wrap(vars(route_type)) +
-#   theme_minimal()
+  dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
+  output <- file.path(normalizePath(dirname(output)), basename(output))
+  gtfs <- gtfstools::read_gtfs(input)
+  gtfs <- set_gtfs_service_window(gtfs, service_start, service_end)
+  duplicate_audit <- if (deduplicate_stops) {
+    deduplicate_gtfs_stops(gtfs)
+  } else {
+    list(
+      gtfs = gtfs,
+      removed = 0L,
+      conflicting = 0L,
+      conflicting_stop_ids = character()
+    )
+  }
+  gtfs <- duplicate_audit$gtfs
+  distance_result <- if (drop_shape_distances) {
+    drop_gtfs_shape_distances(gtfs)
+  } else {
+    list(gtfs = gtfs, changed = character())
+  }
+  gtfs <- distance_result$gtfs
 
-# routes |> filter(stringr::str_detect(route_id, "6970"))
-# trips |> filter(stringr::str_detect(route_id, "6970"))
-# speeds |> filter(stringr::str_detect(trip_id, "6970"))
+  gtfstools::write_gtfs(gtfs, output, overwrite = overwrite)
 
-# # check_gtfs_density --------------------------------------------------------------------------
+  manifest <- list(
+    input = normalizePath(input),
+    output = normalizePath(output),
+    service_start = as.character(as.Date(service_start)),
+    service_end = as.character(as.Date(service_end)),
+    stop_duplicates_removed = duplicate_audit$removed,
+    conflicting_stop_duplicates = duplicate_audit$conflicting,
+    conflicting_stop_ids = duplicate_audit$conflicting_stop_ids,
+    shape_distance_columns_removed_from = distance_result$changed
+  )
+  jsonlite::write_json(
+    manifest,
+    sub("\\.zip$", "_manifest.json", output),
+    pretty = TRUE,
+    auto_unbox = TRUE
+  )
 
-# # adapted from: https://higgicd.github.io/posts/accessibility_analysis/
+  normalizePath(output)
+}
 
-# tar_load(feeds)
-# check_gtfs_density <- function(feed_paths) {
-#   # read in gtfs files
-#   gtfs_list <- purrr::map(
-#     feed_paths,
-#     function(x) {
-#       tidytransit::read_gtfs(x)
-#     }
-#   ) |>
-#     purrr::set_names(feed_paths)
 
-#   gtfs_list <- purrr::map(
-#     gtfs_list,
-#     function(x) {
-#       x$calendar_long <- make_long_calendar(x$calendar)
-#       return(x)
-#     }
-#   )
+prepare_gtfs_feeds <- function(spec, output_dir, overwrite = TRUE) {
+  required <- c(
+    "input", "output_name", "service_start", "service_end",
+    "deduplicate_stops", "drop_shape_distances"
+  )
+  stopifnot(all(required %in% names(spec)))
 
-#   # get service period start and end dates from gtfs files
-#   service_period <- gtfs_list |>
-#     purrr::map(
-#       function(x) purrr::pluck(x, "calendar_long")
-#     ) |>
-#     dplyr::bind_rows(.id = "feed_path")
+  purrr::pmap_chr(
+    spec[, required],
+    function(
+      input, output_name, service_start, service_end,
+      deduplicate_stops, drop_shape_distances
+    ) {
+      prepare_gtfs_feed(
+        input = input,
+        output = file.path(output_dir, output_name),
+        service_start = service_start,
+        service_end = service_end,
+        deduplicate_stops = deduplicate_stops,
+        drop_shape_distances = drop_shape_distances,
+        overwrite = overwrite
+      )
+    }
+  )
+}
 
-#   # get count of services by day and identify overlaps
-#   service_overlap <- service_period |>
-#     dplyr::group_by(service_date) |>
-#     dplyr::summarize(count = n(), feeds = n_distinct(feed_path)) |>
-#     dplyr::mutate(
-#       #overlap = case_when(count == length(gtfs_list) ~ 1, TRUE ~ 0)
-#       # make more flexible - overlap as equal to max services
-#       overlap = dplyr::case_when(count == max(count) ~ 1, TRUE ~ 0),
-#       overlap_2 = dplyr::case_when(feeds == max(feeds) ~ 1, TRUE ~ 0)
-#     )
 
-#   # get a service peak around which to graph
-#   service_density <- service_period$service_date |>
-#     as.numeric() |>
-#     stats::density()
+export_selected_gtfs <- function(spec, prepared_feeds, r5_dir = "data/r5") {
+  stopifnot(nrow(spec) == length(prepared_feeds), "include_r5" %in% names(spec))
+  selected <- prepared_feeds[spec$include_r5]
+  if (length(selected) == 0L) {
+    stop("At least one feed must be selected for the R5 network.")
+  }
 
-#   service_density_peak <- service_density$x[which.max(service_density$y)] |>
-#     as.integer() |>
-#     lubridate::as_date()
+  dir.create(r5_dir, recursive = TRUE, showWarnings = FALSE)
+  excluded <- file.path(r5_dir, spec$output_name[!spec$include_r5])
+  unlink(excluded[file.exists(excluded)])
+  output <- file.path(normalizePath(r5_dir), basename(selected))
+  copied <- file.copy(selected, output, overwrite = TRUE)
+  if (!all(copied)) {
+    stop("Could not export all selected GTFS feeds to ", r5_dir, ".")
+  }
+  normalizePath(output)
+}
 
-#   # get start and end date of overlap period
-#   service_overlap_start <- service_overlap |>
-#     dplyr::filter(feeds == max(feeds)) |>
-#     dplyr::summarize(min(service_date)) |>
-#     dplyr::pull()
 
-#   service_overlap_end <- service_overlap |>
-#     dplyr::filter(feeds == max(feeds)) |>
-#     dplyr::summarize(max(service_date)) |>
-#     dplyr::pull()
+# sanity checks ------------------------------------------------------------------------------
 
-#   service_overlap_start_month <- lubridate::floor_date(
-#     service_overlap_start,
-#     "month"
-#   )
+gtfs_active_service_ids <- function(gtfs, date) {
+  query_date <- as.Date(date)
+  active <- character()
 
-#   service_overlap_end_month <- lubridate::ceiling_date(
-#     service_overlap_end,
-#     "month"
-#   ) -
-#     days(1)
+  if ("calendar" %in% names(gtfs)) {
+    calendar <- gtfs$calendar
+    weekday <- c(
+      "sunday", "monday", "tuesday", "wednesday",
+      "thursday", "friday", "saturday"
+    )[as.POSIXlt(query_date)$wday + 1L]
+    active <- calendar |>
+      dplyr::filter(
+        .env$query_date >= start_date,
+        .env$query_date <= end_date,
+        .data[[weekday]] == 1L
+      ) |>
+      dplyr::pull(service_id)
+  }
 
-#   # 2. plot overlap gantt chart
-#   ###66666666666
-#   plot_data <- feeds_meta |>
-#     mutate(
-#       feed_name = stringr::str_remove(file_name, ".zip$"),
-#     ) |>
-#     select(feed_name, feed_alias, data_source, batch_id, feed_path) |>
-#     right_join(service_period) |>
-#     mutate(feed_name = forcats::fct_reorder(feed_name, service_date))
+  if ("calendar_dates" %in% names(gtfs)) {
+    exceptions <- gtfs$calendar_dates |>
+      dplyr::filter(date == .env$query_date)
+    active <- setdiff(
+      active,
+      exceptions |>
+        dplyr::filter(exception_type == 2L) |>
+        dplyr::pull(service_id)
+    )
+    active <- union(
+      active,
+      exceptions |>
+        dplyr::filter(exception_type == 1L) |>
+        dplyr::pull(service_id)
+    )
+  }
+  unique(active)
+}
 
-#   return(
-#     list(
-#       pretty_name = pop_unit$name_pop_unit,
-#       label = pop_unit$label_pop_unit,
-#       plot_data = plot_data,
-#       service_density_peak = service_density_peak,
-#       service_overlap_start = service_overlap_start,
-#       service_overlap_end = service_overlap_end
-#     )
-#   )
-# }
 
-# # make_long_calendar -------------------------------------------------------------------------
+gtfs_feed_audit <- function(feed_path, dates) {
+  gtfs <- gtfstools::read_gtfs(feed_path)
+  trips <- gtfs$trips
+  routes <- gtfs$routes
+  stops <- gtfs$stops
+  stop_times <- gtfs$stop_times
+  frequencies <- gtfs$frequencies
 
-# make_long_calendar <- function(
-#   calendar,
-#   min_start_year = NULL,
-#   max_end_year = NULL
-# ) {
-#   loc <- if (.Platform$OS.type == "windows") {
-#     "English_United States.1252"
-#   } else {
-#     "en_US.UTF-8"
-#   }
+  purrr::map_dfr(as.Date(dates), function(date) {
+    service_ids <- gtfs_active_service_ids(gtfs, date)
+    active_trips <- trips |>
+      dplyr::filter(service_id %in% service_ids)
+    active_trip_ids <- unique(active_trips$trip_id)
+    active_stop_times <- stop_times |>
+      dplyr::filter(trip_id %in% active_trip_ids)
+    active_frequencies <- if (is.null(frequencies)) {
+      NULL
+    } else {
+      frequencies |>
+        dplyr::filter(trip_id %in% active_trip_ids)
+    }
+    speeds <- if ("shapes" %in% names(gtfs) && length(active_trip_ids) > 0L) {
+      gtfstools::get_trip_speed(
+        gtfs,
+        trip_id = active_trip_ids,
+        file = "shapes"
+      )$speed
+    } else {
+      numeric()
+    }
+    finite_speeds <- speeds[is.finite(speeds) & speeds > 0]
+    speed_stat <- function(fun, ...) {
+      if (length(finite_speeds) == 0L) NA_real_ else fun(finite_speeds, ...)
+    }
 
-#   calendar_list <- calendar |>
-#     group_by(service_id) |>
-#     group_split()
+    tibble::tibble(
+      feed = sub("\\.zip$", "", basename(feed_path)),
+      date = date,
+      active = length(service_ids) > 0L,
+      n_services = length(service_ids),
+      n_routes = data.table::uniqueN(active_trips$route_id),
+      n_trips = length(active_trip_ids),
+      n_stop_times = nrow(active_stop_times),
+      n_stops_served = data.table::uniqueN(active_stop_times$stop_id),
+      n_frequency_entries = if (is.null(active_frequencies)) 0L else nrow(active_frequencies),
+      n_speed_estimates = length(speeds),
+      n_invalid_speeds = sum(!is.finite(speeds) | speeds <= 0),
+      speed_mean_kmh = speed_stat(mean),
+      speed_median_kmh = speed_stat(stats::median),
+      speed_p10_kmh = speed_stat(stats::quantile, 0.1, names = FALSE),
+      speed_p90_kmh = speed_stat(stats::quantile, 0.9, names = FALSE),
+      n_stops_total = nrow(stops),
+      n_routes_total = nrow(routes),
+      n_trips_total = nrow(trips)
+    )
+  })
+}
 
-#   calendar_long <- calendar_list |>
-#     purrr::map(
-#       function(x) {
-#         start <- lubridate::ymd(x$start_date)
-#         end <- lubridate::ymd(x$end_date)
-#         if (
-#           !is.null(min_start_year) && lubridate::year(start) < min_start_year
-#         ) {
-#           start <- update(start, year = min_start_year)
-#         }
-#         if (!is.null(max_end_year) && lubridate::year(end) > max_end_year) {
-#           end <- update(end, year = max_end_year)
-#         }
-#         allowed_days <- x |>
-#           select(2:8) |>
-#           tidyr::pivot_longer(
-#             everything(),
-#             names_to = "weekday",
-#             values_to = "allowed"
-#           )
-#         df <- tibble(
-#           service_id = x$service_id,
-#           service_date = seq(start, end, by = "days"),
-#           weekday = wday(service_date, label = T, abbr = F, locale = loc) |>
-#             stringr::str_to_lower()
-#         ) |>
-#           left_join(allowed_days, by = "weekday") |>
-#           filter(allowed == 1)
-#       }
-#     ) |>
-#     bind_rows()
-# }
+
+audit_gtfs_feeds <- function(feed_paths, dates) {
+  purrr::map_dfr(feed_paths, gtfs_feed_audit, dates = dates)
+}
+
+# validate feeds -----------------------------------------------------------------------------
+
+validate_gtfs_feeds <- function(feed_paths, validator_dir) {
+  if (!dir.exists(validator_dir)) {
+    dir.create(validator_dir, recursive = TRUE)
+  }
+  validator_path <- list.files(validator_dir, pattern = "jar$", full.names = T)
+  if (length(validator_path) == 0) {
+    gtfstools::download_validator(validator_dir)
+    validator_path <- list.files(
+      validator_dir,
+      pattern = "jar$",
+      full.names = T
+    )
+  }
+  validator_path <- validator_path[1]
+
+  reports <- purrr::map(
+    feed_paths,
+    function(x) {
+      base_name <- stringr::str_remove(basename(x), "\\.zip$")
+      gtfstools::validate_gtfs(
+        x,
+        output_path = validator_dir,
+        validator = validator_path
+      )
+      html_old <- file.path(validator_dir, "report.html")
+      html_new <- file.path(validator_dir, paste0("report_", base_name, ".html"))
+      json_old <- file.path(validator_dir, "report.json")
+      json_new <- file.path(validator_dir, paste0("report_", base_name, ".json"))
+      file.copy(html_old, html_new, overwrite = TRUE)
+      file.copy(json_old, json_new, overwrite = TRUE)
+      c(html_new, json_new)
+    }
+  )
+
+  unlink(file.path(validator_dir, c("report.html", "report.json")))
+  return(unlist(reports, use.names = FALSE))
+}

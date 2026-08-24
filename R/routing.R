@@ -1,13 +1,32 @@
+# R5 setup -----------------------------------------------------------------------------------
+
+set_r5r_java_options <- function(ram = 48, cpu = 12) {
+	parameters <- c(
+		paste0("-Xmx", ram, "G"),
+		paste0("-XX:ActiveProcessorCount=", cpu)
+	)
+
+	jvm_initialized <- "rJava" %in% loadedNamespaces() &&
+		isTRUE(get(".jniInitialized", envir = asNamespace("rJava")))
+	if (jvm_initialized && !all(parameters %in% getOption("java.parameters"))) {
+		stop(
+			"The JVM is already running with different parameters. ",
+			"Start a fresh R process before calling r5r."
+		)
+	}
+	if (!jvm_initialized) {
+		options(java.parameters = parameters)
+	}
+
+	invisible(parameters)
+}
+
+
 # build_r5r_network --------------------------------------------------------------------------
 
 # dir = "data/r5"
 build_r5r_network <- function(dir, ram = 48, cpu = 12, overwrite = TRUE) {
-	options(
-		java.parameters = c(
-			paste0("-Xmx", ram, "G"),
-			paste0("-XX:ActiveProcessorCount=", cpu)
-		)
-	)
+	set_r5r_java_options(ram = ram, cpu = cpu)
 
 	java_installed <- rJavaEnv::java_check_version_cmd(quiet = T)
 	if (!is.character(java_installed)) {
@@ -22,12 +41,7 @@ build_r5r_network <- function(dir, ram = 48, cpu = 12, overwrite = TRUE) {
 
 # o-d table ----------------------------------------------------------------------------------
 
-# tar_load(cadunico_fam)
-# origins <- cadunico_fam
-# tar_load(stations_sf)
-# destinations <- stations_sf
-
-set_od_table_stations <- function(origins, destinations, origin_filter = NULL) {
+set_od_station_proximity <- function(origins, destinations, origin_filter = NULL) {
 	## origins: cadunico families @ h3 centroid
 	origins <- arrow::open_dataset(origins)
 
@@ -54,7 +68,7 @@ set_od_table_stations <- function(origins, destinations, origin_filter = NULL) {
 }
 
 
-set_od_table_h3 <- function(grid) {
+set_od_grid_all <- function(grid) {
 	grid <- grid |>
 		rename(id = h3_address) |>
 		st_centroid()
@@ -70,41 +84,35 @@ set_od_table_h3 <- function(grid) {
 
 # ttm ----------------------------------------------------------------------------------------
 
-# library(sf)
-# tar_load(r5_network)
-# threads <- 10
-# # mode <- "WALK"
-# # tar_load(od_table_stations)
-# # od_table <- od_table_stations
-# mode <- "TRANSIT"
-# tar_load(od_table_grid)
-# od_table <- od_table_grid
-
-# ttm_12 <- calc_ttm(r5_network, od_table, "SUBWAY", 2012, max_duration = 15)
-# arrow::write_parquet(ttm_12, "ttm_12.parquet")
-# ttm_25 <- calc_ttm(r5_network, od_table, "SUBWAY", 2025, max_duration = 15)
-# arrow::write_parquet(ttm_25, "ttm_25.parquet")
-
 calc_ttm <- function(
 	r5_network,
 	od_table,
 	mode,
 	year = NULL,
+	departure_date = NULL,
 	time_window = 15L,
 	max_duration = 90L,
-	threads = 10
+	threads = 10,
+	ram = 48,
+	java_cpu = 12
 ) {
-	require("data.table")
+	set_r5r_java_options(ram = ram, cpu = java_cpu)
 	network <- r5r::build_network(dirname(r5_network), overwrite = F)
 
-	if (is.null(year)) {
+	if (is.null(year) && is.null(departure_date)) {
 		dep_datetime <- Sys.time()
 	} else {
+		if (is.null(departure_date)) {
+			departure_date <- paste(year, "04-09", sep = "-")
+		}
 		dep_datetime <- paste(
-			paste(year, "04-09", sep = "-"),
+			as.character(departure_date),
 			"07:00:00 "
 		) |>
 			as.POSIXct(tz = "America/Sao_Paulo")
+	}
+	if (is.null(year) && !is.null(departure_date)) {
+		year <- as.integer(format(as.Date(departure_date), "%Y"))
 	}
 
 	ttm <- r5r::travel_time_matrix(

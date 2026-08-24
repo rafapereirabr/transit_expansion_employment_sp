@@ -14,7 +14,7 @@ rjavaenv/*
 data/*
 !data/station_openings.xlsx
 data-raw/stations_raw.xlsx
-data-raw/feeds_sptrans.zip
+data-raw/*.zip
 
 /.quarto/
 **/*.quarto_ipynb
