@@ -3,7 +3,23 @@
 This file records durable methodological decisions and findings. It is not a
 task list; deferred work belongs in `BACKLOG.md`.
 
-## Research objective
+## Research objective and products
+
+The overarching objective is to study how São Paulo's rapid-transit expansion affects labor-market
+outcomes, with emphasis on people in socioeconomic vulnerability. CadÚnico is the main source
+because it provides residential addresses and repeated observations; linkage to RAIS adds detailed
+formal-employment outcomes and workplace information.
+
+The work has three horizons:
+
+1. An immediate executive box with descriptive statistics and the GTFS/accessibility analysis,
+   without causal or DiD claims.
+2. A CAF report due around December 2026–January 2027 with a credible policy analysis; a conventional
+   cutoff/buffer design remains an acceptable fallback if a stronger design is not ready.
+3. A longer-term design that treats interference, spatial spillovers, accessibility, transit feeds,
+   and staggered timing more explicitly.
+
+The current technical subproject is to:
 
 Estimate comparable morning-peak transit travel-time matrices for São Paulo in
 2012 and 2025. The analytical departure time is 06:50 on a representative
@@ -12,18 +28,24 @@ weekday, with a 15-minute departure window and a 60-minute maximum trip.
 ## Current feed architecture
 
 - Raw GTFS archives in `data-raw/` are immutable inputs.
+- `source_feed_audit` and `source_feed_reports` describe and validate the raw
+  inputs before any transformation.
 - `prepared_feeds` fixes service dates and known structural defects.
-- `bus_feeds` removes synthetic route types 1 and 2 from the SPTrans feeds while
-  retaining the original bus service and referential integrity.
+- `bus_feeds` removes synthetic route types 1 and 2 from the SPTrans feeds,
+  retains referential integrity and regularizes SPTrans scheduled runtimes.
 - `rail_feeds` reconstructs one standalone rail GTFS per routing-year branch.
 - Reconstructed rail feeds use analytical agencies `METRO` and `CPTM`, including
   privately operated lines under the corresponding system. This keeps every rail
   route distinct from the SPTrans agency without modeling concession history.
-- `r5_feeds` copies the selected bus feed, reconstructed rail feed, shared OSM
-  PBF and elevation raster into separate `data/r5/<year>/` directories.
-- R5 networks and Java processes are separated by year. The JVM itself uses
-  multiple threads, so the two large routing branches are currently run
-  sequentially to control memory pressure.
+- `scenario_feed_audit` and `scenario_feed_reports` describe and validate the
+  bus-plus-reconstructed-rail scenario after transformation. The tidy audits
+  include active service at 06:50, headways, speeds, runtimes and the main model
+  assumptions.
+- The implemented pipeline currently exports and builds separate `data/r5/<year>/`
+  networks. After the full run showed a material routing-time penalty, the next
+  refactor will use one shared R5 network with non-overlapping service calendars
+  and sequential year/date TTM branches. The shared network requires a gate that
+  confirms only the intended year's services are active at each analysis date.
 
 ## Empirical GTFS findings
 
@@ -57,19 +79,26 @@ weekday, with a 15-minute departure window and a 60-minute maximum trip.
 - Historical feeds suggest a measurement/construction break after 2012. Older
   schedules may be systematically optimistic, while later feeds may incorporate
   more realistic traffic conditions.
-- Decision: do not silently replace 2012 bus runtimes with 2015 values. Preserve
-  the original as an optimistic bound and build a sourced, group-specific
-  harmonization using a multi-feed reference period such as 2015–2017.
+- Implemented decision: regularize SPTrans runtimes using the 2015–2017 reference
+  feeds and conditional median speeds by H3 resolution 8 and busway class.
+- Busway matching combines GeoSampa and MobilityData geometry, respects opening
+  dates and distinguishes ordinary streets, managed/exclusive corridors and
+  fully segregated infrastructure. Segment speeds fall back to class-wide and
+  global medians when the local conditional cell is unsupported.
+- The original 2012 schedule remains conceptually useful as an optimistic-bound
+  robustness scenario, but it is not the primary corrected feed.
 
 ## Analytical scenarios
 
 The intended robustness design is:
 
 1. Original 2012 bus schedules with reconstructed 2012 rail.
-2. Harmonized 2012 bus runtimes with reconstructed 2012 rail.
+2. Harmonized 2012 bus runtimes with reconstructed 2012 rail (primary corrected
+   scenario, now implemented).
 3. A conservative sensitivity scenario applying the post-break bus-speed regime
    to 2012 while retaining 2012 routes and frequencies.
-4. Observed 2025 buses with reconstructed 2025 rail.
+4. 2025 bus routes/frequencies with the same harmonized runtime model and
+   reconstructed 2025 rail.
 
 This design separates network expansion, frequency, bus runtime and rail
 service assumptions instead of conflating all changes in a single comparison.
@@ -101,14 +130,32 @@ service assumptions instead of conflating all changes in a single comparison.
   Tatuapé and Brás because it has no `transfers.txt`. Reconstructed trips remove
   those borrowed/redundant stops and the `rail_stop_corrections` target creates
   explicit bidirectional transfers between the platform IDs that remain.
+- Bus regularization preserves routes, trips, stops and shapes and rewrites
+  stop-time progression from modeled segment speeds. The current speed surface
+  is the conditional H3-8 x busway-class median from 2015–2017, with a 25 m
+  busway matching tolerance and a 60% minimum overlap rule recorded in audits.
+
+## Current routing result and performance
+
+- The corrected feeds produced substantially more plausible preliminary
+  accessibility maps, including the 2012–2025 difference using 2019 land use.
+- The latest complete pair of transit TTMs finished successfully. Separate
+  networks took 7 h 46 min (2012) and 6 h 42 min (2025), but the R5 logs show
+  roughly nine hours of long inactivity gaps consistent with macOS sleep or
+  process suspension. Memory compression and swap were also high.
+- Long local runs should prevent sleep (for example with `caffeinate`) and keep
+  the two TTM branches sequential because the JVM already parallelizes routing.
+- The persistent JVM may keep writing the second branch's live log into the
+  first network directory. Log location therefore needs correction before logs
+  are treated as year-specific evidence.
 
 ## External repositories reviewed
 
-- `/Users/baarthur/projects/shenanigans/src`: useful philosophy for assembling
+- `shenanigans`: useful philosophy for assembling
   routes, directional trips, distance-derived stop times and HPM frequencies.
-- `/Users/baarthur/projects/gtfs_santos_vlt`: useful example of deriving service
+- `gtfs_santos_vlt`: useful example of deriving service
   periods from published timetables.
-- `/Users/baarthur/ipea/aop/git_baarthur/aopgtfs`: useful validation patterns and
+- `aopgtfs`: useful validation patterns and
   handling of malformed archives. General package development is out of scope
   for this project.
 
@@ -121,3 +168,12 @@ service assumptions instead of conflating all changes in a single comparison.
   first departure, and must preserve the complete stop sequence.
 - Historical archive dates are taken from filenames when calendars are overly
   broad. Corrupt historical archives are logged rather than silently included.
+
+## Corrections and workflow learnings
+
+Append durable corrections as `[LEARN:category] wrong assumption → corrected practice or fact`.
+
+[LEARN:workflow] `AGENTS.md`, `MEMORY_2.md`, and the initial `CHANGELOG.md` imported on 2026-08-24
+described the separate `aoplanduse` repository → treat imported workflow files as templates until
+their claims are verified against this repository; `MEMORY.md` and `BACKLOG.md` were the factual
+starting points for this project.

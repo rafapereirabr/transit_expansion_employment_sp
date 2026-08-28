@@ -1,6 +1,35 @@
 # Backlog
 
-## Required before final travel-time matrices
+This file contains unfinished work only. Durable findings and decisions belong in `MEMORY.md`.
+
+## Immediate deliverable — executive box
+
+- [ ] Agree on the box's question, audience, length, and core descriptive claims with the project
+  team.
+- [ ] Select a small set of defensible statistics from the GTFS/accessibility work.
+- [ ] Produce final accessibility figures and accompanying assumption notes.
+- [ ] Keep causal language and DiD estimates out of this product.
+
+## Medium term — CAF report (Dec 2026–Jan 2027)
+
+- [ ] Finalize the CadÚnico–RAIS linkage, analysis panel, outcomes, and disclosure protocol.
+- [ ] Define residential treatment cohorts, eligible controls, exclusion buffers, and sensitivity
+  cutoffs.
+- [ ] Assess residential mobility, staggered timing, COVID-era heterogeneity, anticipation, and
+  pre-trends.
+- [ ] Compare the feasible baseline design with explicit spatial-spillover specifications.
+- [ ] Pre-specify the minimum credible fallback design that can ship by the deadline.
+
+## Longer-term research design
+
+- [ ] Develop an interference-aware estimand connecting transit accessibility to direct and
+  spillover labor-market effects.
+- [ ] Investigate how continuous accessibility changes can enter a staggered design without being
+  reduced entirely to station-distance cutoffs.
+- [ ] Separate mechanisms involving employment, formalization, wages, commuting, job matching, and
+  residential sorting.
+
+## Accessibility pipeline — required before final travel-time matrices
 
 - [ ] Build a historically sourced alternative to the pragmatic rail-service
   scenario, with 2012 and 2025 HPM runtimes/headways for every operating line.
@@ -16,16 +45,25 @@
 - [x] Declare bus-only SPTrans feeds that remove route types 1 and 2.
 - [x] Declare yearly standalone rail-feed branches and export them alongside the
   corresponding bus feed.
-- [ ] Rerun a small OD smoke test before the full matrix, after sourced rail
-  service parameters pass the feed gates.
-- [ ] Estimate 2012 bus-runtime correction factors by comparable route groups,
-  using several feeds from 2015–2017 rather than one arbitrary snapshot.
+- [x] Run the corrected full 2012 and 2025 transit matrices and inspect the
+  resulting accessibility maps.
+- [x] Estimate and apply 2012 bus runtimes from the 2015–2017 reference period,
+  conditional on H3-8 location and busway class, with documented fallbacks.
+- [ ] Replace the two year-specific R5 networks with one shared network whose
+  feeds have non-overlapping calendars; keep the two TTM branches sequential.
+- [ ] Add a pre-routing gate confirming that only the intended year's routes and
+  services are active at each analysis datetime.
+- [ ] Fix R5 log capture so the second sequential branch cannot write its live
+  log into the first year's directory.
 - [ ] Run original, harmonized and conservative 2012 scenarios and decompose the
   accessibility difference.
 
 ## Useful audits
 
-- [ ] Record active routes and departures at 06:50 in the tidy feed audit.
+- [x] Record active routes/departures, headways, speeds and runtimes at 06:50 in
+  tidy source and scenario feed audits.
+- [x] Validate raw feeds before transformation and corrected bus-plus-rail feeds
+  after transformation.
 - [ ] Compare raw and HPM-only feed counts, ZIP size, network-build time, peak
   memory and a fixed small-OD routing time.
 - [ ] Confirm that the HPM-only feed reproduces raw-feed travel times for a fixed

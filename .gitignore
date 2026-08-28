@@ -22,3 +22,7 @@ sidequests/*
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Rendered previews of workflow reports (Markdown is canonical)
+quality_reports/**/*.html
+quality_reports/**/*_files/
