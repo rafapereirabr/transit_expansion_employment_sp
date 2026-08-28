@@ -1,8 +1,24 @@
-# IDEs
-.idea/
+.Rproj.user
+.Rapp.history
+.Rhistory
+.RData
+.Ruserdata
+Thumbs.db
+.DS_Store
+.positai
 
-# Hugo
-/resources/
-public/
-jsconfig.json
-node_modules/
+*.png
+~$*.xlsx
+
+rjavaenv/*
+data/*
+!data/station_openings.xlsx
+data-raw/stations_raw.xlsx
+data-raw/*.zip
+data-raw/*.rar
+data-raw/gtfs_history
+sidequests/*
+!sidequests/*.R
+
+/.quarto/
+**/*.quarto_ipynb
