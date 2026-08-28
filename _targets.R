@@ -25,7 +25,8 @@ tar_option_set(
     "duckspatial",
     "sf",
     "geoarrow",
-    "ggplot2",
+		"ggplot2",
+		"h3o",
     "lwgeom"
   ),
   format = "parquet",
@@ -37,7 +38,7 @@ tar_option_set(
   workspace_on_error = TRUE
 )
 
-tar_source()
+tar_source(files = list.files("R", pattern = "\\.R$", full.names = TRUE))
 
 if (!dir.exists("data")) {
   dir.create("data")
@@ -82,10 +83,23 @@ list(
 		format = "rds"
 	),
 	tar_target(
-		name = routing_dates,
-		command = setNames(
-			as.Date(c("2012-04-10", "2025-04-08")),
-			c("2012", "2025")
+		name = routing_spec,
+		command = tibble::tibble(
+			year = c(2012L, 2025L),
+			datetime = as.POSIXct(
+				c("2012-04-10 06:50:00", "2025-04-08 06:50:00"),
+				tz = "America/Sao_Paulo"
+			)
+		) |>
+			dplyr::group_by(year) |>
+			targets::tar_group(),
+		iteration = "group"
+	),
+	tar_target(
+		name = r5_resources,
+		command = list(
+			ram = as.integer(Sys.getenv("R5R_RAM_GB", "8")),
+			cpu = as.integer(Sys.getenv("R5R_CPU", "4"))
 		),
 		format = "rds"
 	),
@@ -102,6 +116,14 @@ list(
 			overwrite = T
 		),
 		format = "file"
+	),
+	tar_target(
+		name = rail_service_spec,
+		command = set_rail_service_spec(stations_sf)
+	),
+	tar_target(
+		name = rail_stop_corrections,
+		command = set_rail_stop_corrections()
 	),
 	tar_target(
 		name = lines_sf,
@@ -123,7 +145,7 @@ list(
 	),
 	tar_target(
 		name = grid_sf,
-		command = sf_from_parquet(munis_sf) |> st_buffer(1e3) |> h3_from_sf(),
+		command = sf_from_parquet(munis_sf) |> h3_from_sf(),
 		format = "rds"
 	),
 	tar_target(
@@ -161,7 +183,7 @@ list(
 
 	## transit feeds ---------------------------------------------------------------------------
 	tar_target(
-		name = gtfs_raw_feeds,
+		name = raw_feed_paths,
 		command = c(
 			"data-raw/gtfs_sptrans_2012.zip",
 			"data-raw/gtfs_emtu_2014.zip",
@@ -171,86 +193,125 @@ list(
 		format = "file"
 	),
 	tar_target(
-		name = gtfs_spec,
+		name = feed_spec,
 		command = tibble::tibble(
-			input = gtfs_raw_feeds,
-			output_name = c(
-				"gtfs_sptrans_2012.zip",
-				"gtfs_emtu_2014_proxy_2012.zip",
-				"gtfs_sptrans_2025.zip",
-				"gtfs_emtu_2025.zip"
-			),
-			service_start = as.Date(c(
-				"2012-01-01",
-				"2012-01-01",
-				"2025-01-01",
-				"2025-01-01"
-			)),
-			service_end = as.Date(c(
-				"2012-12-31",
-				"2012-12-31",
-				"2025-12-31",
-				"2025-12-31"
-			)),
+			input = raw_feed_paths,
+			output_name = basename(input),
+			year = c(2012L, 2012L, 2025L, 2025L),
+			service_start = as.Date(c(rep("2012-01-01", 2), rep("2025-01-01", 2))),
+			service_end = as.Date(c(rep("2012-12-31", 2), rep("2025-12-31", 2))),
+			analysis_date = as.Date(c("2012-04-10", "2012-04-10", "2025-04-08", "2025-04-08")),
+			source_audit_date = as.Date(c("2012-04-10", "2014-07-08", "2025-04-08", "2025-04-08")),
 			deduplicate_stops = c(FALSE, TRUE, FALSE, FALSE),
-			drop_shape_distances = TRUE
+			drop_shape_distances = TRUE,
+			remove_rail = c(TRUE, FALSE, TRUE, FALSE),
+			regularize_bus_times = c(TRUE, FALSE, TRUE, FALSE),
+			# Change only these flags after inspecting the audit/reports.
+			include_r5 = c(TRUE, FALSE, TRUE, FALSE)
 		)
 	),
 	tar_target(
-		name = prepared_gtfs_feeds,
-		command = prepare_gtfs_feeds(
-			gtfs_spec,
-			output_dir = "data/gtfs/processed"
+		name = source_feed_audit,
+		command = audit_source_feeds(
+			feed_paths = raw_feed_paths,
+			feed_spec = feed_spec,
+			time_window = 15L
+		)
+	),
+	tar_target(
+		name = source_feed_reports,
+		command = validate_feeds(
+			feed_paths = raw_feed_paths,
+			validator_dir = "data/gtfs_validator/source"
 		),
 		format = "file"
 	),
 	tar_target(
-		name = gtfs_audit,
-		command = audit_gtfs_feeds(
-			feed_paths = prepared_gtfs_feeds,
-			dates = routing_dates
-		)
+		name = bus_speed_surface,
+		command = "sidequests/check_busways_output/conditional_speed_surface_h3_8.csv",
+		format = "file"
 	),
 	tar_target(
-		name = gtfs_reports,
-		command = validate_gtfs_feeds(
-			feed_paths = prepared_gtfs_feeds,
-			validator_dir = "data/gtfs_validator"
+		name = raw_busway_paths,
+		command = c("data-raw/busways.gpkg", "data-raw/mobilidados_2025.zip"),
+		format = "file"
+	),
+	tar_target(
+		name = prepared_feeds,
+		command = prepare_feeds(feed_spec, output_dir = "data/gtfs/processed"),
+		format = "file"
+	),
+	tar_target(
+		name = bus_feeds,
+		command = write_bus_feeds(
+			feed_paths = prepared_feeds,
+			spec = feed_spec,
+			speed_surface_path = bus_speed_surface,
+			geosampa_busways = raw_busway_paths[1],
+			mobilidados_busways = raw_busway_paths[2],
+			output_dir = "data/gtfs/bus"
 		),
 		format = "file"
 	),
 	tar_target(
-		name = gtfs_selection,
-		command = {
-			gtfs_audit
-			gtfs_reports
-			tibble::tibble(
-				output_name = gtfs_spec$output_name,
-				# Change only these flags after inspecting the audit/reports.
-				include_r5 = c(TRUE, FALSE, TRUE, FALSE)
-			)
-		}
+		name = rail_feeds,
+		command = write_scenario_rail_feed(
+			prepared_feeds = prepared_feeds,
+			feed_spec = feed_spec,
+			routing_spec = routing_spec,
+			service_spec = rail_service_spec,
+			stop_corrections = rail_stop_corrections
+		),
+		pattern = map(routing_spec),
+		format = "file"
+	),
+	tar_target(
+		name = scenario_feed_audit,
+		command = audit_scenario_feeds(
+			bus_feeds = bus_feeds,
+			rail_feed = rail_feeds,
+			feed_spec = feed_spec,
+			routing_spec = routing_spec,
+			time_window = 15L
+		),
+		pattern = map(routing_spec, rail_feeds)
+	),
+	tar_target(
+		name = scenario_feed_reports,
+		command = validate_scenario_feeds(
+			bus_feeds = bus_feeds,
+			rail_feed = rail_feeds,
+			feed_spec = feed_spec,
+			routing_spec = routing_spec,
+			validator_dir = "data/gtfs_validator/scenario"
+		),
+		pattern = map(routing_spec, rail_feeds),
+		format = "file"
 	),
 	tar_target(
 		name = r5_feeds,
-		command = export_selected_gtfs(
-			spec = gtfs_selection,
-			prepared_feeds = prepared_gtfs_feeds,
+		command = export_feeds(
+			spec = feed_spec,
+			prepared_feeds = bus_feeds,
+			year = routing_spec$year,
+			additional_feeds = rail_feeds,
 			r5_dir = "data/r5"
+		),
+		pattern = map(routing_spec, rail_feeds),
+		format = "file",
+		deployment = "main"
+	),
+
+	## cadunico families ----------------------------------------------------------------------
+	tar_target(
+		name = cadunico_fam,
+		command = read_cad_families(
+			years = time_window,
+			munis = munis_sf,
+			save_dir = "data/temp"
 		),
 		format = "file"
 	),
-
-   ## cadunico families ----------------------------------------------------------------------
-		tar_target(
-			name = cadunico_fam,
-			command = read_cad_families(
-				years = time_window,
-				munis = munis_sf,
-				save_dir = "data/temp"
-			),
-			format = "file"
-		),
 
 	## routing ---------------------------------------------------------------------------------
 	tar_target(
@@ -269,20 +330,26 @@ list(
 	),
 	tar_target(
 		name = r5_network,
-		command = {
-			r5_feeds
-			gtfs_audit
-			build_r5r_network(dir = "data/r5")
-		},
-		format = "file"
+		command = build_r5r_network(
+			dir = unique(dirname(r5_feeds)),
+			feed_paths = r5_feeds,
+			ram = r5_resources$ram,
+			cpu = r5_resources$cpu
+		),
+		pattern = map(r5_feeds),
+		format = "file",
+		deployment = "main"
 	),
 	tar_target(
 		name = ttm_walk_stations,
 		command = calc_ttm(
-			r5_network = r5_network,
+			r5_network = r5_network[basename(dirname(r5_network)) == "2025"],
 			od_table = od_station_proximity,
 			mode = "WALK",
-			max_duration = 180L
+			max_duration = 180L,
+			threads = r5_resources$cpu,
+			ram = r5_resources$ram,
+			java_cpu = r5_resources$cpu
 		)
 	),
 	tar_target(
@@ -291,11 +358,14 @@ list(
 			r5_network = r5_network,
 			od_table = od_grid_all,
 			mode = "TRANSIT",
-			departure_date = routing_dates,
-			max_duration = 60L
+			departure_datetime = routing_spec$datetime,
+			max_duration = 60L,
+			threads = r5_resources$cpu,
+			ram = r5_resources$ram,
+			java_cpu = r5_resources$cpu
 		),
-		pattern = map(routing_dates),
-		deployment = "worker"
+		pattern = map(r5_network, routing_spec),
+		deployment = "main"
 	),
 
 	## individuals: cadunico + rais ------------------------------------------------------------

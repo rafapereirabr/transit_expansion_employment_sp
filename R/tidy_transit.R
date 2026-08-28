@@ -31,6 +31,9 @@ tidy_transit_stations <- function(subway, planned_subway, train, planned_train,
   subway_stations <- subway_stations |> 
     select(all_of(col_select)) |> 
     rename(all_of(col_rename)) |> 
+    # GeoSampa duplicates Vila Mariana at the same coordinates under station
+    # codes 33 and 50. Code 50 is the canonical identifier used downstream.
+    filter(code_station != 33) |>
     mutate(running = 1)
   
   

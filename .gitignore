@@ -15,6 +15,10 @@ data/*
 !data/station_openings.xlsx
 data-raw/stations_raw.xlsx
 data-raw/*.zip
+data-raw/*.rar
+data-raw/gtfs_history
+sidequests/*
+!sidequests/*.R
 
 /.quarto/
 **/*.quarto_ipynb
