@@ -273,9 +273,7 @@ write_analysis_feeds <- function(
 
 # synthetic bus travel times ----------------------------------------------------------------
 
-read_bus_speed_surface <- function(path) {
-  stopifnot(file.exists(path))
-  surface <- utils::read.csv(path, stringsAsFactors = FALSE)
+validate_input_bus_speed_surface <- function(surface) {
   required <- c(
     "h3", "segregation", "speed_kmh", "class_speed_kmh",
     "observations", "years"
@@ -557,7 +555,7 @@ write_bus_feed <- function(
 write_bus_feeds <- function(
   feed_paths,
   spec,
-  speed_surface_path = NULL,
+  speed_surface = NULL,
   geosampa_busways = NULL,
   mobilidados_busways = NULL,
   output_dir = "data/gtfs/bus",
@@ -568,7 +566,7 @@ write_bus_feeds <- function(
     all(c("output_name", "remove_rail", "regularize_bus_times") %in% names(spec))
   )
   speed_surface <- if (any(spec$regularize_bus_times)) {
-    read_bus_speed_surface(speed_surface_path)
+    validate_input_bus_speed_surface(speed_surface)
   } else {
     NULL
   }

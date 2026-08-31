@@ -85,8 +85,19 @@ weekday, with a 15-minute departure window and a 60-minute maximum trip.
   dates and distinguishes ordinary streets, managed/exclusive corridors and
   fully segregated infrastructure. Segment speeds fall back to class-wide and
   global medians when the local conditional cell is unsupported.
+- The complete bus-speed estimation chain is now part of the `targets` DAG. The
+  13 historical GTFS archives, model parameters and busway inputs are explicit
+  dependencies; extraction branches by archive; and the inventory, combined
+  segments, feed diagnostics, segment matches and final surface are stored as
+  internal Parquet targets. Production targets no longer read generated files
+  from `sidequests/`.
 - The original 2012 schedule remains conceptually useful as an optimistic-bound
   robustness scenario, but it is not the primary corrected feed.
+
+[LEARN:targets] Export every inspectable bus-speed intermediate as a stable
+`format = "file"` Parquet → keep pipeline intermediates as ordinary
+`format = "parquet"` targets and pass the validated surface directly to the bus
+feed builder; reserve file targets for raw inputs and actual external outputs.
 
 ## Analytical scenarios
 
