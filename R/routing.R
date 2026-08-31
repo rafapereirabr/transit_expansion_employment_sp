@@ -6,7 +6,8 @@ set_r5r_java_options <- function(ram = 48, cpu = 12) {
 		paste0("-XX:ActiveProcessorCount=", cpu)
 	)
 
-	jvm_initialized <- "rJava" %in% loadedNamespaces() &&
+	jvm_initialized <- "rJava" %in%
+		loadedNamespaces() &&
 		isTRUE(get(".jniInitialized", envir = asNamespace("rJava")))
 	if (jvm_initialized && !all(parameters %in% getOption("java.parameters"))) {
 		stop(
@@ -41,7 +42,11 @@ save_r5r_log <- function(dir, label, required = FALSE) {
 	source <- file.path(dir, "r5r-log.log")
 	if (!file.exists(source)) {
 		message <- paste0("R5 log not found: ", source)
-		if (required) stop(message) else warning(message, call. = FALSE)
+		if (required) {
+			stop(message)
+		} else {
+			warning(message, call. = FALSE)
+		}
 		return(invisible(NA_character_))
 	}
 	label <- gsub("[^[:alnum:]_-]", "_", tolower(label))
@@ -49,7 +54,11 @@ save_r5r_log <- function(dir, label, required = FALSE) {
 	copied <- file.copy(source, destination, overwrite = TRUE)
 	if (!copied) {
 		message <- paste0("Could not preserve R5 log at ", destination, ".")
-		if (required) stop(message) else warning(message, call. = FALSE)
+		if (required) {
+			stop(message)
+		} else {
+			warning(message, call. = FALSE)
+		}
 		return(invisible(NA_character_))
 	}
 	normalizePath(destination)
@@ -114,7 +123,7 @@ set_od_station_proximity <- function(origins, destinations, origin_filter = NULL
 
 set_od_grid_all <- function(grid) {
 	grid <- grid |>
-		rename(id = h3_address) |>
+		filter(if_any(where(is.numeric), ~ .x > 0)) |>
 		st_centroid()
 
 	od <- bind_rows(

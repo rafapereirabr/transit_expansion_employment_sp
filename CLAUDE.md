@@ -6,6 +6,7 @@ The imported file above is the canonical project constitution. Also read the rel
 or skill under `.agents/` for the current task.
 
 Do not duplicate project facts here. Claude-specific permissions, hooks, or discovery adapters may
-live under `.claude/` later, but they must not replace or contradict `AGENTS.md`.
+live under `.claude/`, but they must not replace or contradict `AGENTS.md`.
 
-When a user invokes a shared skill by name, open `.agents/skills/<name>/SKILL.md` and follow it.
+Discovery adapters under `.claude/skills/` point to the canonical shared procedures. When a user
+invokes a shared skill by name, follow `.agents/skills/<name>/SKILL.md` in full.

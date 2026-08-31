@@ -1,47 +1,47 @@
 # targets setup ------------------------------------------------------------------------------
 
 options(
-  arrow.pull_as_vector = FALSE,
-  arrow.unsafe_metadata = TRUE,
-  future.globals.maxSize = 1e4^1024
+	arrow.pull_as_vector = FALSE,
+	arrow.unsafe_metadata = TRUE,
+	future.globals.maxSize = 1e4^1024
 )
 
 suppressPackageStartupMessages(
-  {
-    library(targets)
-    library(crew)
-    library(dplyr)
-    library(geoarrow)
-  }
+	{
+		library(targets)
+		library(crew)
+		library(dplyr)
+		library(geoarrow)
+	}
 )
 
 
 # Set target options:
 tar_option_set(
-  packages = c(
-    "arrow",
-    "dplyr",
-    "docstring",
-    "duckspatial",
-    "sf",
-    "geoarrow",
+	packages = c(
+		"arrow",
+		"dplyr",
+		"docstring",
+		"duckspatial",
+		"sf",
+		"geoarrow",
 		"ggplot2",
 		"h3o",
-    "lwgeom"
-  ),
-  format = "parquet",
-  deployment = "main",
-  controller = crew_controller_local(
-    workers = floor(.6 * parallelly::freeCores()[1])
-  ),
-  trust_timestamps = TRUE,
-  workspace_on_error = TRUE
+		"lwgeom"
+	),
+	format = "parquet",
+	deployment = "main",
+	controller = crew_controller_local(
+		workers = floor(.6 * parallelly::freeCores()[1])
+	),
+	trust_timestamps = TRUE,
+	workspace_on_error = TRUE
 )
 
 tar_source(files = list.files("R", pattern = "\\.R$", full.names = TRUE))
 
 if (!dir.exists("data")) {
-  dir.create("data")
+	dir.create("data")
 }
 
 
@@ -145,7 +145,8 @@ list(
 	),
 	tar_target(
 		name = grid_sf,
-		command = sf_from_parquet(munis_sf) |> h3_from_sf(),
+		command = aopdata::read_landuse("spo", geometry = TRUE) |>
+			dplyr::select(id = id_hex, P001, T001, E001, S001),
 		format = "rds"
 	),
 	tar_target(
@@ -293,11 +294,10 @@ list(
 		command = export_feeds(
 			spec = feed_spec,
 			prepared_feeds = bus_feeds,
-			year = routing_spec$year,
 			additional_feeds = rail_feeds,
-			r5_dir = "data/r5"
+			r5_dir = "data/r5",
+			output_subdir = "all"
 		),
-		pattern = map(routing_spec, rail_feeds),
 		format = "file",
 		deployment = "main"
 	),
@@ -336,22 +336,21 @@ list(
 			ram = r5_resources$ram,
 			cpu = r5_resources$cpu
 		),
-		pattern = map(r5_feeds),
 		format = "file",
 		deployment = "main"
 	),
-	tar_target(
-		name = ttm_walk_stations,
-		command = calc_ttm(
-			r5_network = r5_network[basename(dirname(r5_network)) == "2025"],
-			od_table = od_station_proximity,
-			mode = "WALK",
-			max_duration = 180L,
-			threads = r5_resources$cpu,
-			ram = r5_resources$ram,
-			java_cpu = r5_resources$cpu
-		)
-	),
+	# tar_target(
+	# 	name = ttm_walk_stations,
+	# 	command = calc_ttm(
+	# 		r5_network = r5_network,
+	# 		od_table = od_station_proximity,
+	# 		mode = "WALK",
+	# 		max_duration = 180L,
+	# 		threads = r5_resources$cpu,
+	# 		ram = r5_resources$ram,
+	# 		java_cpu = r5_resources$cpu
+	# 	)
+	# ),
 	tar_target(
 		name = ttm_transit_all,
 		command = calc_ttm(
@@ -359,14 +358,16 @@ list(
 			od_table = od_grid_all,
 			mode = "TRANSIT",
 			departure_datetime = routing_spec$datetime,
-			max_duration = 60L,
+			max_duration = 120L,
 			threads = r5_resources$cpu,
 			ram = r5_resources$ram,
 			java_cpu = r5_resources$cpu
 		),
-		pattern = map(r5_network, routing_spec),
+		pattern = map(routing_spec),
 		deployment = "main"
 	),
+
+	## accessibility ---------------------------------------------------------------------------
 
 	## individuals: cadunico + rais ------------------------------------------------------------
 	tar_target(

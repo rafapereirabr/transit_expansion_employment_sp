@@ -16,6 +16,8 @@ outputs belong in git history, `MEMORY.md`, or the relevant report—not here.
 ### Added
 
 - Shared workflow material under `.agents/`.
+- Thin Claude Code discovery adapters under `.claude/skills/`; all procedure bodies remain
+  canonical under `.agents/skills/`.
 - Initial rules for planning, pipeline verification, session handoff, R code, and confidential data.
 - Initial skills for R review, diagnosis, research specification, environment capture, checkpoints,
   and explicitly authorized commits.

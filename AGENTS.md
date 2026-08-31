@@ -4,7 +4,7 @@
 
 **Title:** Urban Transport and Employment — the case of São Paulo
 
-**Partnership:** CAF, Gregório Luz (UC Berkeley), Rafael Pereira (Ipea), and Arthur Bazolli
+**Members:** Gregório Luz (UC Berkeley), Rafael Pereira (Ipea), and Arthur Bazolli (Ipea), in partnership with CAF
 
 **Objective:** study how rapid-transit expansion in São Paulo affects labor-market outcomes,
 especially for people in socioeconomic vulnerability.
@@ -116,13 +116,19 @@ use a smoke test when available and state clearly when a full run remains pendin
 - Use relative paths and `TRUE`/`FALSE`, not `T`/`F`.
 - Keep reusable logic in documented functions under `R/`; keep orchestration in `_targets.R`.
 - Do not edit `_targets_packages.R` by hand.
+- Prefer Arrow, `dplyr` and the broader tidy ecosystem, and DuckDB/`duckspatial` when they provide a
+  clear and efficient solution, especially for large or spatial data. This is a preference, not a
+  prohibition: use base R, `data.table`, or another appropriate tool when it is simpler, clearer,
+  or better suited to the task. Do not contort code merely to stay within the preferred stack.
 - Preserve `targets` dependency tracking: pass files and parameters as target dependencies instead
   of hiding them in global state.
 - Set and document seeds for stochastic work.
 - Make joins explicit and check cardinality when linking CadÚnico, RAIS, spatial units, or GTFS.
 - Treat CRS, time zone, service date, analysis year, and spatial resolution as explicit data.
 - Comments should explain assumptions and reasons, not restate syntax.
-- Format with `air format` after R edits when available.
+- After R edits, run `air format .` from the repository root so Air discovers and applies the local
+  `air.toml` (tabs, 101-character line width, and the project's other settings). Do not generate a
+  new Air configuration or rely on generic defaults in place of this file.
 
 ## Methodological guardrails
 
