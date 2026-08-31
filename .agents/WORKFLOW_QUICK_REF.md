@@ -34,8 +34,10 @@ Ask in natural language or name the skill, for example:
 - “Use `interview-me` to formulate the executive box.”
 - “Create a `checkpoint` before we stop.”
 
-Both agents should open `.agents/skills/<name>/SKILL.md`. Skills describe capabilities, not
-vendor-specific tool names.
+The procedure in `.agents/skills/<name>/SKILL.md` is canonical. Codex reads it from the shared
+skill catalog; Claude Code discovers a thin adapter under `.claude/skills/<name>/SKILL.md`, which
+points back to the same canonical procedure. Skills describe capabilities, not vendor-specific tool
+names.
 
 ## What was intentionally not imported
 
