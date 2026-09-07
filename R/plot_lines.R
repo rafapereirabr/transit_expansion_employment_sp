@@ -60,7 +60,8 @@ plot_lines <- function(footprint_sf, munis_sf, lines_sf, stations_sf, metro_pale
 			values = c(
 				"Municipal borders" = "dotted",
 				"Expanded Downtown" = "dotdash",
-				"Under Construction" = "dashed"
+				"Under Construction" = "dashed",
+				"Planned" = "longdash"
 			)
 		)
 
@@ -81,7 +82,7 @@ plot_lines <- function(footprint_sf, munis_sf, lines_sf, stations_sf, metro_pale
 			key_glyph = draw_key_point
 		) +
 		geom_sf(
-			data = filter(lines_sf, status == "Under Construction"),
+			data = filter(lines_sf, status == "Under Construction" | code_line == 17),
 			aes(linetype = status),
 			color = "gray5",
 			alpha = 0.75,

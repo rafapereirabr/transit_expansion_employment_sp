@@ -485,17 +485,62 @@ list(
 	),
 
 	## accessibility ---------------------------------------------------------------------------
-
-	## individuals: cadunico + rais ------------------------------------------------------------
 	tar_target(
-		name = cadunico_ind,
-		command = read_cad_individuals(
-			year = time_window,
-			families = cadunico_fam,
-			save_dir = "data/temp"
-		),
-		pattern = map(time_window),
+		name = ttm_bypass,
+		command = c("data/temp/ttm_transit_2012", "data/temp/ttm_transit_2025"),
+		format = "file"
+	),
+	tar_target(name = access, command = calc_access(ttm_bypass, grid_sf)),
+	tar_target(name = access_plot, command = plot_access(access, grid_sf), format = "rds"),
+
+	## pilot study -----------------------------------------------------------------------------
+	tar_target(name = pilot_years, command = c(2012, 2019, 2025), format = "rds"),
+	tar_target(name = pilot_cells, command = set_study_area(stations_sf, grid_sf)),
+	tar_target(
+		name = pilot_families,
+		command = assign_treatment(cadunico_fam, pilot_cells, pilot_years)
+	),
+	tar_target(
+		name = pilot_individuals,
+		command = read_cad_individuals(pilot_years, pilot_families, "data/temp"),
+		pattern = map(pilot_years),
 		format = "file",
 		deployment = "worker"
+	),
+	tar_target(
+		name = cadunico_rais_pilot,
+		command = read_rais(pilot_years, pilot_individuals, "data/temp"),
+		pattern = map(pilot_years, pilot_individuals),
+		format = "file",
+		deployment = "worker"
+	),
+	tar_target(
+		name = panel_pilot,
+		command = make_panel(
+			cadunico_rais = cadunico_rais_pilot,
+			ttm = ttm_bypass,
+			balance = TRUE,
+			years = pilot_years,
+			save_dir = "data/temp"
+		),
+		format = "file"
+	),
+	tar_target(
+		name = naive_table,
+		command = write_naive_table(panel_pilot, "tables", balanced = TRUE),
+		format = "file"
 	)
+
+	## individuals: cadunico + rais ------------------------------------------------------------
+	# tar_target(
+	# 	name = cadunico_ind,
+	# 	command = read_cad_individuals(
+	# 		year = time_window,
+	# 		families = cadunico_fam,
+	# 		save_dir = "data/temp"
+	# 	),
+	# 	pattern = map(time_window),
+	# 	format = "file",
+	# 	deployment = "worker"
+	# )
 )
