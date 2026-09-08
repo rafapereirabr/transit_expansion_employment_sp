@@ -49,8 +49,6 @@ This file contains unfinished work only. Durable findings and decisions belong i
   resulting accessibility maps.
 - [x] Estimate and apply 2012 bus runtimes from the 2015–2017 reference period,
   conditional on H3-8 location and busway class, with documented fallbacks.
-- [ ] Replace the two year-specific R5 networks with one shared network whose
-  feeds have non-overlapping calendars; keep the two TTM branches sequential.
 - [ ] Add a pre-routing gate confirming that only the intended year's routes and
   services are active at each analysis datetime.
 - [ ] Fix R5 log capture so the second sequential branch cannot write its live

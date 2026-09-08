@@ -16,8 +16,7 @@ set_bus_speed_spec <- function() {
 		buffer_m = 25,
 		minimum_overlap = 0.60,
 		shrinkage_observations = 50,
-		reference_year_count = 3L,
-		test_buffers_m = c(15, 25, 40)
+		reference_year_count = 3L
 	)
 }
 
@@ -39,8 +38,76 @@ nearest_tuesday <- function(date) {
 }
 
 
-build_reference_feed_inventory <- function(paths, spec) {
+discover_reference_feed_members <- function(archive_path, spec) {
+	stopifnot(file.exists(archive_path))
+	members <- archive::archive(archive_path) |>
+		dplyr::mutate(member_index = dplyr::row_number()) |>
+		dplyr::filter(
+			stringr::str_detect(basename(path), "^gtfs_sao_paulo_sptrans_.*[.]zip$")
+		) |>
+		dplyr::mutate(
+			feed_id = tools::file_path_sans_ext(basename(path)),
+			reference_date = as.Date(
+				vapply(path, extract_gtfs_filename_date, as.Date(NA)),
+				origin = "1970-01-01"
+			),
+			year = as.integer(format(reference_date, "%Y"))
+		) |>
+		dplyr::filter(year %in% spec$reference_years) |>
+		dplyr::arrange(reference_date, feed_id)
+	stopifnot(
+		nrow(members) > 0L,
+		!anyNA(members$reference_date),
+		!anyDuplicated(members$feed_id),
+		setequal(unique(members$year), spec$reference_years),
+		spec$reference_feed_id %in% members$feed_id
+	)
+	members
+}
+
+
+extract_reference_feeds <- function(archive_path, output_dir, spec) {
+	members <- discover_reference_feed_members(archive_path, spec)
+	dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
+	archive::archive_extract(
+		archive = archive_path,
+		dir = output_dir,
+		files = members$member_index,
+		strip_components = 1L
+	)
+	paths <- file.path(output_dir, basename(members$path))
+	stopifnot(all(file.exists(paths)))
+	paths
+}
+
+
+project_relative_paths <- function(paths) {
+	project_root <- normalizePath(".", mustWork = TRUE)
+	root_prefix <- paste0(project_root, .Platform$file.sep)
+	vapply(
+		paths,
+		function(path) {
+			normalized <- normalizePath(path, mustWork = TRUE)
+			if (startsWith(normalized, root_prefix)) {
+				substring(normalized, nchar(root_prefix) + 1L)
+			} else {
+				normalized
+			}
+		},
+		character(1),
+		USE.NAMES = FALSE
+	)
+}
+
+
+build_reference_feed_inventory <- function(paths, spec, source_archive = NA_character_) {
 	stopifnot(length(paths) > 0L, all(file.exists(paths)))
+	paths <- project_relative_paths(paths)
+	source_archive <- if (all(is.na(source_archive))) {
+		NA_character_
+	} else {
+		project_relative_paths(source_archive)
+	}
 	dates <- as.Date(
 		vapply(paths, extract_gtfs_filename_date, as.Date(NA)),
 		origin = "1970-01-01"
@@ -48,6 +115,7 @@ build_reference_feed_inventory <- function(paths, spec) {
 	inventory <- tibble::tibble(
 		feed_id = tools::file_path_sans_ext(basename(paths)),
 		feed_path = paths,
+		source_archive = source_archive,
 		reference_date = dates,
 		year = as.integer(format(reference_date, "%Y")),
 		audit_date = nearest_tuesday(reference_date)
@@ -245,6 +313,62 @@ combine_hpm_segments <- function(results) {
 combine_feed_diagnostics <- function(results) {
 	dplyr::bind_rows(purrr::map(results, "diagnostics")) |>
 		dplyr::arrange(year, audit_date, feed_id)
+}
+
+
+estimate_reference_bus_speed_model <- function(
+	inventory,
+	geosampa_path,
+	mobilidados_path,
+	spec
+) {
+	results <- lapply(
+		split_reference_feed_inventory(inventory),
+		extract_hpm_bus_segments,
+		spec = spec
+	)
+	segments <- combine_hpm_segments(results)
+	feed_diagnostics <- combine_feed_diagnostics(results)
+	reference_feed <- inventory |>
+		dplyr::filter(feed_id == spec$reference_feed_id)
+	busways <- read_reference_busways(
+		geosampa_path = geosampa_path,
+		mobilidados_path = mobilidados_path,
+		date = spec$reference_date,
+		projected_crs = spec$projected_crs
+	)
+	segment_geometry <- build_reference_segment_geometry(
+		segments = segments,
+		reference_feed = reference_feed,
+		projected_crs = spec$projected_crs
+	)
+	matches <- classify_reference_segments(
+		segments_sf = segment_geometry,
+		busways = busways,
+		buffer_m = spec$buffer_m,
+		minimum_overlap = spec$minimum_overlap
+	)
+	surface <- estimate_bus_speed_surface(segments, matches, spec)
+	validation <- validate_bus_speed_surface(
+		surface = surface,
+		inventory = inventory,
+		diagnostics = feed_diagnostics,
+		spec = spec
+	)
+	list(
+		surface = surface,
+		feed_diagnostics = feed_diagnostics,
+		speed_summary = summarise_bus_speed_surface(segments),
+		busways = busways,
+		validation = validation,
+		counts = tibble::tibble(
+			feeds = nrow(inventory),
+			segments = nrow(segments),
+			reference_segments = nrow(segment_geometry),
+			matched_segments = sum(matches$segregation != "mixed_traffic"),
+			cells = nrow(surface)
+		)
+	)
 }
 
 
@@ -527,6 +651,14 @@ validate_bus_speed_surface <- function(surface, inventory, diagnostics, spec) {
 }
 
 
+# One-off tuning used 15, 25 and 40 m; 25 m was retained for production.
+# Example:
+# measure_busway_buffers(
+# 	segments_sf = segment_geometry,
+# 	busways = busways,
+# 	distances_m = c(15, 25, 40),
+# 	minimum_overlap = 0.60
+# )
 measure_busway_buffers <- function(segments_sf, busways, distances_m, minimum_overlap) {
 	purrr::map_dfr(distances_m, function(distance_m) {
 		conn <- duckspatial::ddbs_create_conn()
@@ -576,9 +708,9 @@ bus_speed_h3_as_sf <- function(data) {
 }
 
 
-plot_bus_speed_diagnostics <- function(segments, surface, busways, spec, output_dir) {
+plot_bus_speed_diagnostics <- function(speed_summary, surface, busways, spec, output_dir) {
 	dir.create(output_dir, recursive = TRUE, showWarnings = FALSE)
-	summary_sf <- summarise_bus_speed_surface(segments) |>
+	summary_sf <- speed_summary |>
 		bus_speed_h3_as_sf()
 	conditional_sf <- surface |>
 		dplyr::filter(years >= 2L) |>

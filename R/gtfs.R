@@ -81,6 +81,36 @@ drop_gtfs_shape_distances <- function(gtfs) {
 }
 
 
+drop_nonstandard_gtfs_tables <- function(gtfs) {
+	standard_tables <- c(
+		"agency",
+		"stops",
+		"routes",
+		"trips",
+		"stop_times",
+		"calendar",
+		"calendar_dates",
+		"fare_attributes",
+		"fare_rules",
+		"fare_media",
+		"fare_products",
+		"fare_leg_rules",
+		"fare_transfer_rules",
+		"shapes",
+		"frequencies",
+		"transfers",
+		"pathways",
+		"levels",
+		"feed_info",
+		"translations",
+		"attributions",
+		"areas",
+		"stop_areas"
+	)
+	gtfs[names(gtfs) %in% standard_tables]
+}
+
+
 prepare_feed <- function(
 	input,
 	output,
@@ -97,7 +127,8 @@ prepare_feed <- function(
 
 	dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
 	output <- file.path(normalizePath(dirname(output)), basename(output))
-	gtfs <- gtfstools::read_gtfs(input)
+	gtfs <- gtfstools::read_gtfs(input) |>
+		drop_nonstandard_gtfs_tables()
 	gtfs <- set_gtfs_service_window(gtfs, service_start, service_end)
 	duplicate_audit <- if (deduplicate_stops) {
 		deduplicate_gtfs_stops(gtfs)
@@ -627,7 +658,7 @@ audit_source_feeds <- function(feed_paths, feed_spec, time = "06:50:00", time_wi
 	stopifnot(length(feed_paths) == nrow(feed_spec))
 	purrr::map_dfr(seq_along(feed_paths), function(index) {
 		datetime <- as.POSIXct(
-			paste(feed_spec$source_audit_date[index], time),
+			paste(feed_spec$analysis_date[index], time),
 			tz = "America/Sao_Paulo"
 		)
 		audit_feed(

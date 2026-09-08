@@ -22,8 +22,9 @@ The work has three horizons:
 The current technical subproject is to:
 
 Estimate comparable morning-peak transit travel-time matrices for São Paulo in
-2012 and 2025. The analytical departure time is 06:50 on a representative
-weekday, with a 15-minute departure window and a 60-minute maximum trip.
+2012, 2015, 2019 and 2025. The analytical departure time is 06:50 on the
+Wednesday in the first week of October: 2012-10-03, 2015-10-07, 2019-10-02 and
+2025-10-01, with a 15-minute departure window and a 60-minute maximum trip.
 
 ## Current feed architecture
 
@@ -41,11 +42,10 @@ weekday, with a 15-minute departure window and a 60-minute maximum trip.
   bus-plus-reconstructed-rail scenario after transformation. The tidy audits
   include active service at 06:50, headways, speeds, runtimes and the main model
   assumptions.
-- The implemented pipeline currently exports and builds separate `data/r5/<year>/`
-  networks. After the full run showed a material routing-time penalty, the next
-  refactor will use one shared R5 network with non-overlapping service calendars
-  and sequential year/date TTM branches. The shared network requires a gate that
-  confirms only the intended year's services are active at each analysis date.
+- The pipeline exports all year-specific bus and rail feeds to one shared R5
+  network under `data/r5/all`, with non-overlapping service calendars and
+  year/date TTM branches. Scenario audits gate the inputs by confirming that the
+  intended services are active at each analysis date.
 
 ## Empirical GTFS findings
 
@@ -86,11 +86,17 @@ weekday, with a 15-minute departure window and a 60-minute maximum trip.
   fully segregated infrastructure. Segment speeds fall back to class-wide and
   global medians when the local conditional cell is unsupported.
 - The complete bus-speed estimation chain is now part of the `targets` DAG. The
-  13 historical GTFS archives, model parameters and busway inputs are explicit
-  dependencies; extraction branches by archive; and the inventory, combined
-  segments, feed diagnostics, segment matches and final surface are stored as
-  internal Parquet targets. Production targets no longer read generated files
-  from `sidequests/`.
+  original `data-raw/3550308_sao_paulo.rar`, model parameters and busway inputs
+  are explicit dependencies. The 13 SPTrans feeds for 2015--2017 are selected
+  automatically from the RAR member names and extracted under
+  `data/gtfs/history/`; their portable metadata are stored in the Parquet
+  `reference_feed_inventory`. Transient extraction, spatial matching,
+  validation and diagnostics run inside the compact RDS `bus_speed_model`, and
+  only the production `bus_speed_surface` is exposed as a separate Parquet
+  target. Production targets no longer read generated files from `sidequests/`.
+- The 15/25/40 m busway-buffer comparison was a one-off tuning exercise and is
+  intentionally outside the DAG. `measure_busway_buffers()` remains available
+  with a compact example; production uses 25 m and 60% minimum overlap.
 - The original 2012 schedule remains conceptually useful as an optimistic-bound
   robustness scenario, but it is not the primary corrected feed.
 
@@ -98,6 +104,11 @@ weekday, with a 15-minute departure window and a 60-minute maximum trip.
 `format = "file"` Parquet → keep pipeline intermediates as ordinary
 `format = "parquet"` targets and pass the validated surface directly to the bus
 feed builder; reserve file targets for raw inputs and actual external outputs.
+
+[LEARN:targets] Give every computational intermediate its own target → retain a
+target boundary only when it provides material caching, parallelism, inspection
+or an external file contract. The one-minute bus-speed estimator is clearer as
+one compact model target than as ten transient targets.
 
 ## Analytical scenarios
 
@@ -129,12 +140,16 @@ service assumptions instead of conflating all changes in a single comparison.
   conventions. These are validated against the `stations_sf` target,
   whose upstream opening-date input is `data/station_openings.xlsx`. Feed-specific
   `route_id` values are inferred and checked rather than treated as line identity.
-  The primary pragmatic scenario applies common service assumptions in both
-  years: 35 km/h commercial speed for metro/monorail, 40 km/h for metropolitan
+  The primary pragmatic scenario applies common service assumptions in every
+  year: 35 km/h commercial speed for metro/monorail, 40 km/h for metropolitan
   rail, and HPM headways from a prior project table. Metrô headways came from
   annual reports; CPTM values came from a professional contact. Ranges use their
   midpoint: L9 5.5 minutes, L11 6 minutes and L12 7 minutes. Runtime is derived
   transparently as operational extension divided by commercial speed.
+- The January 2015 SPTrans template has no usable L15 route. The reconstructed
+  2015 rail feed borrows only L15 topology from the 2019 template and restricts
+  it declaratively to Vila Prudente–Oratório in both directions; no other 2019
+  rail topology enters the 2015 scenario.
 - Rail `stops` and `shapes` remain year-specific GTFS inputs. The canonical
   station registry supplies line identity, not replacement coordinates. The 2012
   feed embeds platform IDs from connecting lines as consecutive stops at Paraíso,

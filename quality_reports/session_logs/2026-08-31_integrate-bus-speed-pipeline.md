@@ -46,3 +46,29 @@
 - `targets::tar_manifest()` through its default subprocess stalled and was
   interrupted. Subsequent builds used `callr_function = NULL` and completed
   without leaving orphan R processes.
+
+## Simplification — 2026-09-01
+
+- Replaced the hardcoded list of 13 ZIP paths with the original
+  `data-raw/3550308_sao_paulo.rar`. The pipeline now discovers SPTrans members,
+  filters 2015--2017 from parsed filenames and extracts them automatically to
+  `data/gtfs/history/`.
+- Added source-RAR provenance and relative paths to the Parquet feed inventory.
+- Consolidated ten transient targets into `bus_speed_model`, a compact RDS with
+  validation, counts, feed diagnostics and data needed for figures.
+- Kept `reference_feed_inventory` and `bus_speed_surface` as the two inspectable
+  Parquet data products. The bus-speed subgraph now has six operational targets
+  instead of fourteen.
+- Rebuilt the chain from the RAR. It reproduced 1,014,406 segments, 22,545
+  reference segments, 1,842 surface cells and the legacy surface within
+  `5.2e-14`; `bus_feeds` remained current because the surface hash was unchanged.
+- Generated `_targets_packages.R` through `targets::tar_renv()` and recorded
+  `archive` 1.1.14 in `renv.lock`.
+
+## Buffer-tuning cleanup — 2026-09-07
+
+- Removed the 15/25/40 m comparison from `bus_speed_model` so this one-off tuning
+  does not invalidate the production surface or bus feeds.
+- Retained `measure_busway_buffers()` and a short commented example in
+  `R/bus_speeds.R`; the tested values were 15, 25 and 40 m, and production keeps
+  the selected 25 m buffer with a 60% minimum-overlap rule.

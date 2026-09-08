@@ -19,15 +19,16 @@ suppressPackageStartupMessages(
 # Set target options:
 tar_option_set(
 	packages = c(
+		"archive",
 		"arrow",
 		"dplyr",
 		"docstring",
 		"duckspatial",
-		"sf",
 		"geoarrow",
 		"ggplot2",
 		"h3o",
-		"lwgeom"
+		"lwgeom",
+		"sf"
 	),
 	format = "parquet",
 	deployment = "main",
@@ -85,11 +86,9 @@ list(
 	tar_target(
 		name = routing_spec,
 		command = tibble::tibble(
-			year = c(2012L, 2025L),
-			datetime = as.POSIXct(
-				c("2012-04-10 06:50:00", "2025-04-08 06:50:00"),
-				tz = "America/Sao_Paulo"
-			)
+			year = c(2012L, 2015L, 2019L, 2025L),
+			datetime = paste0(year, "-10-", c("03", "07", "02", "01"), " 06:50:00") |>
+				as.POSIXct(tz = "America/Sao_Paulo")
 		) |>
 			dplyr::group_by(year) |>
 			targets::tar_group(),
@@ -98,8 +97,8 @@ list(
 	tar_target(
 		name = r5_resources,
 		command = list(
-			ram = as.integer(Sys.getenv("R5R_RAM_GB", "8")),
-			cpu = as.integer(Sys.getenv("R5R_CPU", "4"))
+			ram = as.integer(Sys.getenv("r5r_ram", "8")),
+			cpu = as.integer(Sys.getenv("r5r_cpu", "4"))
 		),
 		format = "rds"
 	),
@@ -129,6 +128,10 @@ list(
 	tar_target(
 		name = rail_stop_corrections,
 		command = set_rail_stop_corrections()
+	),
+	tar_target(
+		name = rail_template_overrides,
+		command = set_rail_template_overrides()
 	),
 	tar_target(
 		name = lines_sf,
@@ -192,29 +195,15 @@ list(
 		name = raw_feed_paths,
 		command = c(
 			"data-raw/gtfs_sptrans_2012.zip",
-			"data-raw/gtfs_emtu_2014.zip",
-			"data-raw/gtfs_sptrans_2025.zip",
-			"data-raw/gtfs_emtu_2025.zip"
+			"data-raw/gtfs_sptrans_2015.zip",
+			"data-raw/gtfs_sptrans_2019.zip",
+			"data-raw/gtfs_sptrans_2025.zip"
 		),
 		format = "file"
 	),
 	tar_target(
 		name = feed_spec,
-		command = tibble::tibble(
-			input = raw_feed_paths,
-			output_name = basename(input),
-			year = c(2012L, 2012L, 2025L, 2025L),
-			service_start = as.Date(c(rep("2012-01-01", 2), rep("2025-01-01", 2))),
-			service_end = as.Date(c(rep("2012-12-31", 2), rep("2025-12-31", 2))),
-			analysis_date = as.Date(c("2012-04-10", "2012-04-10", "2025-04-08", "2025-04-08")),
-			source_audit_date = as.Date(c("2012-04-10", "2014-07-08", "2025-04-08", "2025-04-08")),
-			deduplicate_stops = c(FALSE, TRUE, FALSE, FALSE),
-			drop_shape_distances = TRUE,
-			remove_rail = c(TRUE, FALSE, TRUE, FALSE),
-			regularize_bus_times = c(TRUE, FALSE, TRUE, FALSE),
-			# Change only these flags after inspecting the audit/reports.
-			include_r5 = c(TRUE, FALSE, TRUE, FALSE)
-		)
+		command = set_feed_spec(raw_feed_paths, routing_spec)
 	),
 	tar_target(
 		name = source_feed_audit,
@@ -238,114 +227,47 @@ list(
 		format = "file"
 	),
 	tar_target(
+		name = gtfs_history_archive,
+		command = "data-raw/3550308_sao_paulo.rar",
+		format = "file"
+	),
+	tar_target(
 		name = reference_feed_paths,
-		command = c(
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20150113.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20160614.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20160823.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20161221.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170118.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170215.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170315.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170417.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170519.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170615.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170816.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20170920.zip",
-			"data-raw/gtfs_history/gtfs_sao_paulo_sptrans_20171016.zip"
+		command = extract_reference_feeds(
+			archive_path = gtfs_history_archive,
+			output_dir = "data/gtfs/history",
+			spec = bus_speed_spec
 		),
 		format = "file"
 	),
 	tar_target(
 		name = reference_feed_inventory,
-		command = build_reference_feed_inventory(reference_feed_paths, bus_speed_spec)
+		command = build_reference_feed_inventory(
+			paths = reference_feed_paths,
+			spec = bus_speed_spec,
+			source_archive = gtfs_history_archive
+		)
 	),
 	tar_target(
-		name = reference_feed_row,
-		command = split_reference_feed_inventory(reference_feed_inventory),
-		iteration = "list",
-		format = "rds"
-	),
-	tar_target(
-		name = hpm_segment_result,
-		command = extract_hpm_bus_segments(reference_feed_row, bus_speed_spec),
-		pattern = map(reference_feed_row),
-		iteration = "list",
-		format = "rds"
-	),
-	tar_target(
-		name = hpm_segments,
-		command = combine_hpm_segments(hpm_segment_result)
-	),
-	tar_target(
-		name = feed_diagnostics,
-		command = combine_feed_diagnostics(hpm_segment_result)
-	),
-	tar_target(
-		name = reference_feed,
-		command = reference_feed_inventory |>
-			dplyr::filter(feed_id == bus_speed_spec$reference_feed_id)
-	),
-	tar_target(
-		name = reference_busways,
-		command = read_reference_busways(
+		name = bus_speed_model,
+		command = estimate_reference_bus_speed_model(
+			inventory = reference_feed_inventory,
 			geosampa_path = raw_busway_paths[1],
 			mobilidados_path = raw_busway_paths[2],
-			date = bus_speed_spec$reference_date,
-			projected_crs = bus_speed_spec$projected_crs
+			spec = bus_speed_spec
 		),
 		format = "rds"
-	),
-	tar_target(
-		name = reference_segment_geometry,
-		command = build_reference_segment_geometry(
-			segments = hpm_segments,
-			reference_feed = reference_feed,
-			projected_crs = bus_speed_spec$projected_crs
-		),
-		format = "rds"
-	),
-	tar_target(
-		name = segment_busway_matches,
-		command = classify_reference_segments(
-			segments_sf = reference_segment_geometry,
-			busways = reference_busways,
-			buffer_m = bus_speed_spec$buffer_m,
-			minimum_overlap = bus_speed_spec$minimum_overlap
-		)
 	),
 	tar_target(
 		name = bus_speed_surface,
-		command = estimate_bus_speed_surface(
-			segments = hpm_segments,
-			matches = segment_busway_matches,
-			spec = bus_speed_spec
-		)
-	),
-	tar_target(
-		name = bus_speed_validation,
-		command = validate_bus_speed_surface(
-			surface = bus_speed_surface,
-			inventory = reference_feed_inventory,
-			diagnostics = feed_diagnostics,
-			spec = bus_speed_spec
-		)
-	),
-	tar_target(
-		name = busway_buffer_diagnostics,
-		command = measure_busway_buffers(
-			segments_sf = reference_segment_geometry,
-			busways = reference_busways,
-			distances_m = bus_speed_spec$test_buffers_m,
-			minimum_overlap = bus_speed_spec$minimum_overlap
-		)
+		command = bus_speed_model$surface
 	),
 	tar_target(
 		name = bus_speed_diagnostic_figures,
 		command = plot_bus_speed_diagnostics(
-			segments = hpm_segments,
+			speed_summary = bus_speed_model$speed_summary,
 			surface = bus_speed_surface,
-			busways = reference_busways,
+			busways = bus_speed_model$busways,
 			spec = bus_speed_spec,
 			output_dir = "figures/diagnostics"
 		),
@@ -358,17 +280,14 @@ list(
 	),
 	tar_target(
 		name = bus_feeds,
-		command = {
-			bus_speed_validation
-			write_bus_feeds(
-				feed_paths = prepared_feeds,
-				spec = feed_spec,
-				speed_surface = bus_speed_surface,
-				geosampa_busways = raw_busway_paths[1],
-				mobilidados_busways = raw_busway_paths[2],
-				output_dir = "data/gtfs/bus"
-			)
-		},
+		command = write_bus_feeds(
+			feed_paths = prepared_feeds,
+			spec = feed_spec,
+			speed_surface = bus_speed_surface,
+			geosampa_busways = raw_busway_paths[1],
+			mobilidados_busways = raw_busway_paths[2],
+			output_dir = "data/gtfs/bus"
+		),
 		format = "file"
 	),
 	tar_target(
@@ -378,7 +297,8 @@ list(
 			feed_spec = feed_spec,
 			routing_spec = routing_spec,
 			service_spec = rail_service_spec,
-			stop_corrections = rail_stop_corrections
+			stop_corrections = rail_stop_corrections,
+			template_overrides = rail_template_overrides
 		),
 		pattern = map(routing_spec),
 		format = "file"
@@ -490,7 +410,10 @@ list(
 		command = c("data/temp/ttm_transit_2012", "data/temp/ttm_transit_2025"),
 		format = "file"
 	),
-	tar_target(name = access, command = calc_access(ttm_bypass, grid_sf)),
+	tar_target(
+		name = access,
+		command = calc_access(ttm_transit_all, grid_sf, years = routing_spec$year)
+	),
 	tar_target(name = access_plot, command = plot_access(access, grid_sf), format = "rds"),
 
 	## pilot study -----------------------------------------------------------------------------

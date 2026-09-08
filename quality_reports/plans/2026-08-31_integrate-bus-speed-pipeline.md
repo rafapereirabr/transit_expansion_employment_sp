@@ -19,23 +19,21 @@ consumes their results.
 ## Intended DAG
 
 ```text
-historical GTFS paths + bus-speed specification
+original historical RAR + bus-speed specification
+  -> automatically selected/extracted 2015-2017 SPTrans ZIPs
   -> reference feed inventory
-  -> HPM segment branches
-  -> combined HPM segments
 
-raw busway paths + classification specification + one reference GTFS
-  -> dated busway geometry
-  -> reference segment index
-  -> segment-to-busway matches
-
-combined HPM segments + segment-to-busway matches + model specification
+reference feed inventory + raw busways + specification
+  -> compact bus-speed model
   -> conditional bus-speed surface
-  -> bus feeds
+     -> bus feeds
+     -> diagnostic figures
 ```
 
-The main production chain should contain only data targets. Maps and tuning diagnostics should be
-downstream diagnostic targets so that changing a figure does not invalidate `bus_feeds`.
+The model target combines transient segment extraction, spatial classification, validation and
+diagnostic summaries. These steps take about one minute together, so separate target boundaries add
+more graph complexity than useful caching. Maps remain downstream so figure changes do not
+invalidate `bus_feeds`.
 
 ## Implementation plan
 
@@ -45,10 +43,12 @@ downstream diagnostic targets so that changing a figure does not invalidate `bus
   extraction window, H3 resolution 8, segment length and speed filters, reference feed/date,
   projected CRS, 25 m corridor buffer, 60% minimum overlap, minimum five observations per
   feed-year-cell, shrinkage prior of 50 observations and three reference years.
-- Declare the exact historical GTFS ZIPs selected for 2015--2017 as a `format = "file"` target.
-  Build the inventory deterministically from these declared paths and parsed dates; fail on missing,
-  duplicated or out-of-range dates. Do not let an untracked `list.files()` result silently change the
-  model.
+- Declare `data-raw/3550308_sao_paulo.rar` as the original `format = "file"` input. Discover SPTrans
+  members from its archive table, parse dates from their names, select the configured reference
+  years and extract the selected ZIPs under `data/gtfs/history/`.
+- Build a portable Parquet inventory from the extracted filenames, including relative feed paths,
+  parsed dates, audit dates and the relative path of the source RAR. Fail on missing, duplicated or
+  out-of-range dates.
 - Keep `data-raw/busways.gpkg` and `data-raw/mobilidados_2025.zip` in the existing
   `raw_busway_paths` file target. Make the selected reference GTFS an explicit dependency rather
   than repeating its path inside a function.
@@ -72,39 +72,30 @@ downstream diagnostic targets so that changing a figure does not invalidate `bus
   finite coordinates and speeds, allowed segregation classes, nonempty reference-year coverage and
   a unique `(h3, segregation)` key in the final surface.
 
-### 3. Declare granular targets stored as Parquet
+### 3. Keep only useful target boundaries
 
-- Dynamically branch HPM extraction over the historical feed inventory so that adding or replacing
-  one archive rebuilds only its branch. Return segment data and diagnostics separately, then combine
-  the branches.
-- Use the repository's default `format = "parquet"` for the in-store tabular targets. Do not create
-  CSVs or parallel `format = "file"` copies for pipeline inspection.
-- Represent `reference_feed_inventory`, `hpm_segments`, `segment_busway_matches`,
-  `bus_speed_surface` and `feed_diagnostics` as ordinary data targets with
-  `format = "parquet"`. Let `targets` manage their storage and retrieval instead of assigning stable
-  paths under `data/` and calling `write_parquet_target()`.
-- Keep geometry-bearing targets compatible with GeoParquet storage. For the production match table,
-  retain only stable keys, class and overlap after geometry has served its purpose.
-- Pass the validated `bus_speed_surface` table directly to `write_bus_feeds()`. Remove the
-  path-oriented `read_bus_speed_surface()` boundary, or retain a more general validator that accepts
-  a table without writing and reading it again.
-- Add a separately named export target only in the future if another workflow needs a stable file
-  outside the target store. Such an export would be downstream of the model and would not be read
-  back by `bus_feeds`.
+- Keep six operational targets: source RAR, extracted ZIP paths, Parquet inventory, compact RDS
+  model, Parquet surface and diagnostic figures.
+- Run HPM extraction, feed diagnostics, dated busway preparation, segment geometry, spatial matching
+  and validation inside `bus_speed_model`. Return only compact results needed for
+  inspection or downstream figures; do not retain the million-row segment table in the target store.
+- Store `reference_feed_inventory` and `bus_speed_surface` with the default `format = "parquet"`.
+  Use RDS only for `bus_speed_model`, whose heterogeneous result contains tables and `sf` geometry.
+- Pass the validated `bus_speed_surface` table directly to `write_bus_feeds()`.
 
 ### 4. Separate production outputs from diagnostics
 
 - Promote diagnostics that protect the estimator: feed coverage and invalid-segment shares,
   buffer-match counts, class coverage, fallback shares, support by year and key uniqueness.
-- Express these as data targets and add a validation target that fails on structural errors and
-  reports threshold warnings without contaminating the model table.
+- Retain these as named components of `bus_speed_model`; validation runs before that target can
+  complete, while diagnostics remain accessible with `tar_read(bus_speed_model)`.
 - Rebuild the useful maps from target data under the single directory `figures/diagnostics/`:
   conditional speed, observational coverage, temporal stability and busway classification. Figures
   are `format = "file"`; their source tables remain in-store Parquet targets.
 - Leave tuning-only outputs (the 15/25/40 m buffer comparison, alternative speed-factor tables and
-  the single-2015 exploratory summaries) outside the production path: they may depend on production
-  targets, but neither the final surface nor `bus_feeds` should depend on them. Retain them as
-  explicitly named diagnostic targets where they remain useful for methodological review.
+  the single-2015 exploratory summaries) outside the DAG. Keep the buffer-comparison function and a
+  short commented example with the tested values in `R/bus_speeds.R`, but do not create targets or
+  stored outputs for this small one-off choice.
 
 ### 5. Cut over safely and retire the hidden dependency
 
@@ -127,8 +118,8 @@ downstream diagnostic targets so that changing a figure does not invalidate `bus
 2. Inspect the graph and invalidation with `targets::tar_outdated()`; confirm that raw historical
    feeds and busway inputs are ancestors of the surface and that no `sidequests/` path is an ancestor
    of `bus_feeds`.
-3. Build the narrow chain through the surface and its validation target. Read the five in-store
-   Parquet targets and check their schemas, keys and diagnostic thresholds.
+3. Build the narrow chain through `bus_speed_model` and the surface. Inspect the inventory, model
+   validation, counts and feed diagnostics.
 4. Run the legacy/new equivalence checks before removing the CSV dependency.
 5. Build `bus_feeds` and the narrow scenario-feed audits for 2012 and 2025. Inspect GTFS validator
    results and deterministic trip samples.
@@ -141,8 +132,8 @@ downstream diagnostic targets so that changing a figure does not invalidate `bus
 - No target consumed by the production pipeline reads from `sidequests/`.
 - Every raw input, parameter and transformation used to estimate bus speeds is represented in the
   DAG and invalidates the appropriate downstream targets.
-- All tabular targets in the promoted chain use `format = "parquet"`; none is declared as
-  `format = "file"`, and no new CSV is created.
+- The inventory and production surface use `format = "parquet"`; the heterogeneous compact model
+  uses RDS, raw/extracted archives use file targets, and no CSV is created.
 - Diagnostic figures are written under `figures/diagnostics/` and do not invalidate or gate the
   production of the speed surface and bus feeds.
 - The final surface has the expected schema, positive finite speeds and a unique

@@ -8,7 +8,9 @@
 # # ttm_path <- ttm_transit_all
 # ttm_path <- ttm_bypass
 
-calc_access <- function(ttm_path, grid) {
+calc_access <- function(ttm_path, grid, years) {
+	years <- sort(unique(as.integer(years)))
+	stopifnot(identical(years, c(2012L, 2015L, 2019L, 2025L)))
 	if (inherits(ttm_path, "character")) {
 		ttm <- arrow::open_dataset(ttm_path)
 	} else if (!inherits(ttm_path, "ArrowTabular")) {
@@ -19,12 +21,12 @@ calc_access <- function(ttm_path, grid) {
 
 	in_all <- ttm |>
 		count(from_id, to_id) |>
-		filter(n == 2) |>
+		filter(n == length(years)) |>
 		collect()
 
 	ttm <- ttm |>
 		filter(from_id %in% grid$id & to_id %in% grid$id) |>
-		inner_join(in_all) |>
+		semi_join(in_all, by = c("from_id", "to_id")) |>
 		collect()
 
 	acc <- accessibility::cumulative_cutoff(
@@ -40,16 +42,22 @@ calc_access <- function(ttm_path, grid) {
 	acc_df <- acc |>
 		mutate(
 			CMATT120 = T001,
-			period = factor(year, labels = c("Baseline (pre-2012)", "Post-2025")),
-			.keep = "unused"
-		)
-
-	## tidy --- change
+			period = factor(
+				year,
+				levels = years,
+				labels = c("Baseline (pre-2012)", "2015", "2019", "Post-2025")
+			)
+		) |>
+		select(-T001)
+	## Keep the cumulative 2012 comparison used downstream and add consecutive changes.
 	acc_df <- acc_df |>
-		arrange(period) |>
+		arrange(year, .by_group = FALSE) |>
 		mutate(
-			delta_CMATT120 = CMATT120 - lag(CMATT120),
-			delta_CMATT120_pct = CMATT120 / lag(CMATT120) - 1,
+			previous_year = lag(year),
+			delta_previous_CMATT120 = CMATT120 - lag(CMATT120),
+			delta_previous_CMATT120_pct = CMATT120 / lag(CMATT120) - 1,
+			delta_CMATT120 = CMATT120 - first(CMATT120),
+			delta_CMATT120_pct = CMATT120 / first(CMATT120) - 1,
 			.by = "id"
 		)
 
@@ -57,11 +65,16 @@ calc_access <- function(ttm_path, grid) {
 		select(delta_CMATT120, id, period) |>
 		filter(period == "Post-2025") |>
 		mutate(
-			delta_CMATT120_quartile = quantilize(delta_CMATT120, n_qt = 4, na.rm = T),
-			delta_CMATT120_decile = quantilize(delta_CMATT120, n_qt = 10, na.rm = T)
+			delta_CMATT120_quartile = quantilize(delta_CMATT120, n_qt = 4, na.rm = TRUE),
+			delta_CMATT120_decile = quantilize(delta_CMATT120, n_qt = 10, na.rm = TRUE)
 		)
 
-	acc_df <- left_join(acc_df, acc_quantiles)
+	acc_df <- left_join(
+		acc_df,
+		acc_quantiles,
+		by = c("id", "period", "delta_CMATT120"),
+		relationship = "one-to-one"
+	)
 
 	return(acc_df)
 }
