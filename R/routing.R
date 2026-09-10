@@ -148,7 +148,8 @@ calc_ttm <- function(
 	threads = 10,
 	ram = 48,
 	java_cpu = 12,
-	keep_log = TRUE
+	keep_log = TRUE,
+	as_target_file = TRUE
 ) {
 	set_r5r_java_options(ram = ram, cpu = java_cpu)
 	network <- r5r::build_network(dirname(r5_network), overwrite = F)
@@ -179,7 +180,7 @@ calc_ttm <- function(
 		time_window = time_window,
 		max_trip_duration = max_duration,
 		n_threads = threads,
-		verbose = T
+		progress = T
 	)
 	if (keep_log) {
 		log_label <- paste(tolower(mode), basename(dirname(r5_network)), sep = "_")
@@ -187,7 +188,11 @@ calc_ttm <- function(
 	}
 
 	ttm <- ttm |>
-		mutate(year = !!year, dep_datetime = dep_datetime)
+		mutate(dep_datetime = dep_datetime)
 
-	return(ttm)
+	if (as_target_file) {
+		arrow::write_parquet(ttm, paste0("data/ttm_", mode, routing_spec$year, ".parquet"))
+	} else {
+		return(ttm)
+	}
 }
