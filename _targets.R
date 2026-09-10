@@ -193,12 +193,8 @@ list(
 	## transit feeds ---------------------------------------------------------------------------
 	tar_target(
 		name = raw_feed_paths,
-		command = c(
-			"data-raw/gtfs_sptrans_2012.zip",
-			"data-raw/gtfs_sptrans_2015.zip",
-			"data-raw/gtfs_sptrans_2019.zip",
-			"data-raw/gtfs_sptrans_2025.zip"
-		),
+		command = paste0("data-raw/gtfs_sptrans_", routing_spec$year, ".zip"),
+		pattern = map(routing_spec),
 		format = "file"
 	),
 	tar_target(
@@ -330,11 +326,12 @@ list(
 		name = r5_feeds,
 		command = export_feeds(
 			spec = feed_spec,
-			prepared_feeds = bus_feeds,
-			additional_feeds = rail_feeds,
+			prepared_feeds = c(bus_feeds, rail_feeds),
+			# additional_feeds = ,
 			r5_dir = "data/r5",
-			output_subdir = "all"
+			year = routing_spec$year
 		),
+		pattern = map(routing_spec),
 		format = "file",
 		deployment = "main"
 	),
@@ -368,13 +365,20 @@ list(
 	tar_target(
 		name = r5_network,
 		command = build_r5r_network(
-			dir = unique(dirname(r5_feeds)),
+			dir = file.path("data/r5", routing_spec$year),
 			feed_paths = r5_feeds,
 			ram = r5_resources$ram,
 			cpu = r5_resources$cpu
 		),
+		pattern = map(routing_spec, r5_feeds),
 		format = "file",
 		deployment = "main"
+	),
+	tar_target(
+		name = r5_network_bypass,
+		command = file.path("data/r5", routing_spec$year, "network.dat"),
+		pattern = map(routing_spec),
+		format = "file"
 	),
 	# tar_target(
 	# 	name = ttm_walk_stations,
@@ -389,18 +393,18 @@ list(
 	# 	)
 	# ),
 	tar_target(
-		name = ttm_transit_all,
+		name = ttm_transit,
 		command = calc_ttm(
-			r5_network = r5_network,
 			od_table = od_grid_all,
+			r5_network = r5_network,
 			mode = "TRANSIT",
 			departure_datetime = routing_spec$datetime,
-			max_duration = 120L,
+			max_duration = 90L,
 			threads = r5_resources$cpu,
 			ram = r5_resources$ram,
 			java_cpu = r5_resources$cpu
 		),
-		pattern = map(routing_spec),
+		pattern = map(r5_network, routing_spec),
 		deployment = "main"
 	),
 

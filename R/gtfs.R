@@ -212,18 +212,25 @@ export_feeds <- function(
 	year = NULL,
 	additional_feeds = NULL,
 	r5_dir = "data/r5",
-	output_subdir = if (is.null(year)) "all" else as.character(year)
+	output_subdir = NULL
 ) {
 	stopifnot(
-		nrow(spec) == length(prepared_feeds),
+		# nrow(spec) == length(prepared_feeds),
 		all(c("year", "include_r5") %in% names(spec))
 	)
+	if (is.null(year)) {
+		output_subdir <- "all"
+	} else {
+		output_subdir <- as.character(year)
+	}
 	if (!is.null(year) && length(year) != 1L) {
 		stop("`year` must be NULL or a single year.")
 	}
-	selected_year <- if (is.null(year)) rep(TRUE, nrow(spec)) else spec$year == year
-	selected_rows <- spec$include_r5 & selected_year
-	selected <- c(prepared_feeds[selected_rows], additional_feeds)
+	# selected_year <- if (is.null(year)) rep(TRUE, nrow(spec)) else spec$year == year
+		# selected_rows <- spec$include_r5 & selected_year
+		# selected <- c(prepared_feeds[selected_rows], additional_feeds)
+		selected <- c(prepared_feeds, additional_feeds) |>
+          grep(pattern = year, x = _, value = T)
 	if (length(selected) == 0L) {
 		stop("At least one feed must be selected for the R5 network.")
 	}
