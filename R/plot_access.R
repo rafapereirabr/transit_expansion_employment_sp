@@ -5,15 +5,17 @@
 # tar_load(grid_sf)
 # grid <- grid_sf
 
-plot_access <- function(access, grid, use_delta = TRUE) {
+plot_access <- function(access, grid, access_var = "CMATT90", use_delta = TRUE) {
 	## convert to sf
 	access_sf <- inner_join(access, grid) |>
 		st_as_sf()
 
+	access_sym <- rlang::sym(access_var)
+
 	## initialize level plot
 	if (use_delta) {
 		plot_level <- access_sf |>
-			filter(period == "Baseline (pre-2012)") |>
+			filter(year == min(year)) |>
 			ggplot()
 	} else {
 		plot_level <- ggplot(access_sf)
@@ -21,7 +23,7 @@ plot_access <- function(access, grid, use_delta = TRUE) {
 
 	plot_level <- plot_level +
 		geom_sf(
-			aes(fill = CMATT120), #, color = acc
+			aes(fill = {{ access_sym }}), #, color = acc
 			color = NA,
 			stroke = 0
 		) +
@@ -37,7 +39,7 @@ plot_access <- function(access, grid, use_delta = TRUE) {
 
 	if (!use_delta) {
 		plot_level <- plot_level +
-			facet_wrap(vars(period))
+			facet_wrap(access_var)
 	} else {
 		plot_level <- plot_level +
 			labs(subtitle = "Baseline")

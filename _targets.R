@@ -416,7 +416,16 @@ list(
 	),
 	tar_target(
 		name = access,
-		command = calc_access(ttm_transit_all, grid_sf, years = routing_spec$year)
+		command = calc_access(
+			ttm = ttm_transit,
+			grid = grid_sf,
+			year = ttm_transit$year,
+			crit_val = 90,
+			group = "dep_datetime",
+			method = "cumulative_cutoff"
+		),
+		pattern = map(ttm_transit),
+		deployment = "worker"
 	),
 	tar_target(name = access_plot, command = plot_access(access, grid_sf), format = "rds"),
 
