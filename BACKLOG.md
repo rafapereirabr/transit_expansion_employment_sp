@@ -107,3 +107,14 @@ examined commit `c74f1e6`, while routing code has since changed.
 - [ ] Generalize the workflow beyond weekday morning-peak accessibility.
 - [ ] Revisit `detailed_itineraries()` only if aggregate counterfactuals cannot
   identify the remaining routing discrepancy.
+
+## Positron / renv startup investigation
+
+Current incident recovered and console responsiveness confirmed by the user. Evidence and recovery:
+`quality_reports/session_logs/2026-09-11_positron-renv-startup.md`.
+
+- [ ] Prevent recurrence: investigate/fix the renv 1.2.4 Windows liveness check, which classified
+  a terminated but accessible process object as alive. Determine why the original owner left its
+  sandbox lock. No permanent package or configuration fix has been installed.
+- [ ] If startup latency remains disruptive, profile the synchronization report and package
+  metadata checks separately. Normal startup after recovery completed in 47.67 seconds.

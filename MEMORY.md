@@ -203,3 +203,13 @@ Append durable corrections as `[LEARN:category] wrong assumption → corrected p
 described the separate `aoplanduse` repository → treat imported workflow files as templates until
 their claims are verified against this repository; `MEMORY.md` and `BACKLOG.md` were the factual
 starting points for this project.
+
+[LEARN:diagnostics] A long-lived `renv::paths$lockfile()` query does not establish a lock on
+`renv.lock`: project profile initialization runs before that expression. On 2026-09-11 the actual
+blocker was an orphaned sandbox coordination lock. Windows APIs confirmed its owner had exited,
+but renv 1.2.4's psnice-based liveness check treated the residual process object as alive.
+Preserving and renaming the confirmed orphan released the console and old helpers; normal startup
+with sandbox enabled completed in 47.67 seconds, and the user confirmed console responsiveness.
+Recovery is not permanent recurrence prevention. An old warning reporting 1300 seconds activating
+the sandbox is consistent with the recovered wait, not evidence of a new hang. See
+`quality_reports/session_logs/2026-09-11_positron-renv-startup.md`.
