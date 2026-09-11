@@ -1,106 +1,96 @@
 # library(sf)
 # library(ggplot2)
 # library(patchwork)
+# source("R/utils.R")
+# source("R/calc_access.R")
+
 # tar_load(access)
 # tar_load(grid_sf)
 # grid <- grid_sf
+tar_load(access_spec)
+method <- access_spec[1,]$method
 
-plot_access <- function(access, grid, access_var = "CMATT90", use_delta = TRUE) {
+plot_access <- function(access, grid, use_delta = TRUE, years = NULL, method = NULL) {
+	if (is.null(years)) {
+		years <- unique(access$year)
+	}
+
+  if(!is.null(method)) {
+    method_abbr <- recode_values(method,
+			"cumulative_cutoff" ~ "CMATT", "cumulative_interval" ~ "CIATT", "gravity" ~ "GRATT")
+    access <- filter(access, stringr::str_detect(method, method_abbr))
+  }
+
+	if (use_delta & length(grep("d_", names(access))) == 0) {
+		access <- calc_access_delta(access)
+	}
+
 	## convert to sf
 	access_sf <- inner_join(access, grid) |>
 		st_as_sf()
-
-	access_sym <- rlang::sym(access_var)
-
-	## initialize level plot
-	if (use_delta) {
-		plot_level <- access_sf |>
-			filter(year == min(year)) |>
-			ggplot()
-	} else {
-		plot_level <- ggplot(access_sf)
-	}
-
-	plot_level <- plot_level +
-		geom_sf(
-			aes(fill = {{ access_sym }}), #, color = acc
-			color = NA,
-			stroke = 0
-		) +
-		scale_fill_viridis_c(
-			option = "inferno",
-			labels = scales::label_number(scale = 1e-6, suffix = "M")
-		) +
-		labs(
-			title = "Access to formal jobs by public transit",
-			fill = "Total jobs"
-		) +
-		theme_void()
-
-	if (!use_delta) {
-		plot_level <- plot_level +
-			facet_wrap(access_var)
-	} else {
-		plot_level <- plot_level +
-			labs(subtitle = "Baseline")
-	}
-
-	if (!use_delta) {
-		plot_path <- "figures/acc_cutoff_120.png"
-		ggsave(
-			plot = plot_level,
-			filename = plot_path,
-			dpi = 600,
-			bg = "white",
-			width = 18,
-			height = 9,
-			un = "cm"
-		)
-
-		return(plot_level)
-	}
-
 	contour_sf <- geobr::read_municipality(2025, 3550308)
 
-	plot_delta <- access_sf |>
-		filter(period == "Post-2025") |>
-		ggplot() +
-		geom_sf(aes(fill = delta_CMATT120), color = NA, stroke = 0) +
-		geom_sf(data = contour_sf, fill = NA) +
-		scale_fill_distiller(
-			palette = "RdBu",
-			direction = 1,
-			labels = scales::label_number(scale = 1e-6, suffix = "M"),
-			limits = c(-1e6, 1e6),
-			oob = scales::squish
-		) +
-		labs(
-			title = "Access to formal jobs by public transit",
-			subtitle = "Absolute change (2025 vs. 2012)",
-			fill = "Abs. change"
-		) +
-		theme_void()
+	access_syms <- rlang::syms(c("accessibility", "d_max_access"))
+  stopifnot(access_syms %in% names(access))
 
-	plot_combined <- wrap_plots(plot_level, plot_delta, guides = "collect") *
-		labs(title = NULL) +
-		plot_annotation(title = "Access to formal jobs by public transit")
+	coreplotter <- function(yr) {
+		if (yr == min(years)) {
+			fill_var <- access_syms[[1]]
+			scale_args <- list(
+				option = "inferno",
+				labels = scales::label_number(scale = 1e-6, suffix = "M"),
+				name = "Total jobs"
+			)
+			scale_name <- "scale_fill_viridis_c"
+		} else {
+			fill_var <- access_syms[[2]]
+			scale_args <- list(
+				palette = "RdBu",
+				direction = 1,
+				limits = c(-45e4, 45e4),
+				n.breaks = 9,
+				# labels = scales::label_number(scale = 1e-6, suffix = "M"),
+				labels = scales::label_comma(big.mark = " "),
+				# breaks = c("< 400 000" = -4e5, "-250 000" = -25e4, "250 000" = 25e4, "> 400 000" = 4e5),
+				# breaks = c(-55e3, -12e3, -1200, 0, 500, 8e4, 3e4, 15e4),
+				# breaks = c(-1e5, -5e4, -25e3, -1e3, 0, 1e3, 25e3, 5e4, 1e5),
+				oob = scales::squish,
+				name = "Abs. change"
+			)
+			scale_name <- "scale_fill_distiller"
+		}
 
-	plot_path <- "figures/acc_cutoff_120.png"
+		p <- access_sf |>
+			filter(year == yr) |>
+			ggplot() +
+			geom_sf(aes(fill = {{ fill_var }}), color = NA, stroke = 0) +
+			geom_sf(data = contour_sf, fill = NA) +
+			do.call(scale_name, scale_args) +
+			labs(subtitle = yr) +
+			theme_void()
+
+		return(p)
+	}
+
+	plots <- purrr::map(years, coreplotter)
+
+	plots_combined <- patchwork::wrap_plots(plots, guides = "collect")
+
+	if(is.null(method)) {
+      plot_path <- "figures/accessibility.png"
+	} else {
+      method_alias <- unique(access$method)
+      plot_path <- paste0("figures/acc_", method_alias, ".png")
+	}
 	ggsave(
-		plot = plot_combined,
+		plot = plots_combined,
 		filename = plot_path,
 		dpi = 300,
 		bg = "white",
-		width = 18,
-		height = 9,
+		width = 20,
+		height = 20,
 		un = "cm"
 	)
 
-	plot_list <- list(
-		plot_level = plot_level,
-		plot_delta = plot_delta,
-		plot_combined = plot_combined
-	)
-
-	return(plot_list)
+	return(plots)
 }

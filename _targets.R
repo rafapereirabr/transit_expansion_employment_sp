@@ -415,19 +415,48 @@ list(
 		format = "file"
 	),
 	tar_target(
+		name = balanced_units,
+		command = list.files("_targets/objects", pattern = "ttm_transit_[^all_]", full.names = T) |>
+			arrow::open_dataset() |>
+			distinct(from_id, year) |>
+			collect() |>
+			count(from_id) |>
+			filter(n == max(n)) |>
+			pull(from_id),
+		format = "rds"
+	),
+	tar_target(
+		name = access_spec,
+		command = tibble::tribble(
+			~method             , ~crit_val                 ,
+			"cumulative_cutoff" , list(cutoff = 60)         ,
+			"gravity"           , list(cutoff = 60, sd = 5)
+		) |>
+			dplyr::group_by(method) |>
+			tar_group(),
+		iteration = "group",
+		format = "rds"
+	),
+	tar_target(
 		name = access,
 		command = calc_access(
 			ttm = ttm_transit,
 			grid = grid_sf,
-			year = ttm_transit$year,
-			crit_val = 90,
+			year = unique(ttm_transit$year),
+			crit_val = access_spec$crit_val[[1]],
 			group = "dep_datetime",
-			method = "cumulative_cutoff"
+			method = access_spec$method,
+			balance_origins = FALSE
 		),
-		pattern = map(ttm_transit),
+		pattern = cross(access_spec, ttm_transit),
 		deployment = "worker"
 	),
-	tar_target(name = access_plot, command = plot_access(access, grid_sf), format = "rds"),
+	tar_target(
+		name = access_plots,
+		command = plot_access(access, grid_sf, method = access_spec$method),
+		pattern = map(access_spec),
+		format = "rds"
+	),
 
 	## pilot study -----------------------------------------------------------------------------
 	tar_target(name = pilot_years, command = c(2012, 2019, 2025), format = "rds"),
@@ -454,7 +483,7 @@ list(
 		name = panel_pilot,
 		command = make_panel(
 			cadunico_rais = cadunico_rais_pilot,
-			ttm = ttm_bypass,
+			ttm = ttm_transit,
 			balance = TRUE,
 			years = pilot_years,
 			save_dir = "data/temp"
