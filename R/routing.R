@@ -151,6 +151,16 @@ calc_ttm <- function(
 	keep_log = TRUE,
 	as_target_file = TRUE
 ) {
+	resource_record <- paste(
+		format(Sys.time(), tz = 'America/Sao_Paulo', usetz = TRUE),
+		paste0('network_year=', basename(dirname(r5_network))),
+		paste0('threads=', threads),
+		paste0('java_cpu=', java_cpu),
+		paste0('ram_gb=', ram),
+		sep = ' | '
+	)
+	message('R5 TTM resources | ', resource_record)
+
 	set_r5r_java_options(ram = ram, cpu = java_cpu)
 	network <- r5r::build_network(dirname(r5_network), overwrite = F)
 	on.exit(r5r::stop_r5(network), add = TRUE)
@@ -184,7 +194,10 @@ calc_ttm <- function(
 	)
 	if (keep_log) {
 		log_label <- paste(tolower(mode), basename(dirname(r5_network)), sep = "_")
-		save_r5r_log(dirname(r5_network), log_label)
+		log_path <- save_r5r_log(dirname(r5_network), log_label)
+		if (!is.na(log_path)) {
+			cat('R5 TTM resources | ', resource_record, '\n', file = log_path, append = TRUE, sep = '')
+		}
 	}
 
 	ttm <- ttm |>
