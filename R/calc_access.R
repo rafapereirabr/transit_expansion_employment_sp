@@ -22,7 +22,6 @@
 calc_access <- function(
 	ttm,
 	grid,
-	year = NULL,
 	crit_val = list(),
 	method = c("cumulative_cutoff", "cumulative_interval", "gravity"),
 	group = NULL,
@@ -30,32 +29,35 @@ calc_access <- function(
 	balanced_units = NULL,
 	...
 ) {
-  ## dealbreakers
+	## dealbreakers
 	rlang::arg_match(method)
-	if(balance_origins) stopifnot(!is.null(balanced_units))
+	if (balance_origins) {
+		stopifnot(!is.null(balanced_units))
+	}
 	stopifnot(inherits(crit_val, "list"))
-  if (method == "cumulative_cutoff") stopifnot("cutoff" == names(crit_val))
-  if (method == "cumulative_interval") {
-			stopifnot(c("interval", "interval_increment") %in% names(crit_val))
-		}
-  if (method == "gravity") stopifnot(c("cutoff", "sd") %in% names(crit_val))
-	if (is.null(year)) {
-		year <- unique(ttm$year)
+	if (method == "cumulative_cutoff") {
+		stopifnot("cutoff" == names(crit_val))
+	}
+	if (method == "cumulative_interval") {
+		stopifnot(c("interval", "interval_increment") %in% names(crit_val))
+	}
+	if (method == "gravity") {
+		stopifnot(c("cutoff", "sd") %in% names(crit_val))
 	}
 	require(accessibility)
 
-  ## pre-filter data
-	if (inherits(ttm, "character") | inherits(ttm, "ArrowTabular")) {
+	## pre-filter data
+	if (inherits(ttm, "character")) {
 		ttm <- arrow::open_dataset(ttm) |>
 			collect()
 	}
 
-	if(balance_origins) {
+	if (balance_origins) {
 		ttm <- ttm |>
 			filter(from_id %in% balanced_units)
 	}
 
-  ## build arguments list
+	## build arguments list
 	acc_args <- list(
 		travel_matrix = ttm,
 		land_use_data = grid,
@@ -63,17 +65,17 @@ calc_access <- function(
 		travel_cost = "travel_time_p50",
 		...
 	)
-  rm(ttm)
+	rm(ttm)
 
-  if (method == "gravity") {
-    acc_args <- append(
-		  acc_args,
+	if (method == "gravity") {
+		acc_args <- append(
+			acc_args,
 			list(decay_function = decay_logistic(crit_val[["cutoff"]], crit_val[["sd"]]))
 		)
-  } else {
-    acc_args <- append(acc_args, crit_val)
-  }
-	if(!is.null(group)) {
+	} else {
+		acc_args <- append(acc_args, crit_val)
+	}
+	if (!is.null(group)) {
 		acc_args <- append(acc_args, list(group = group))
 	}
 
@@ -93,7 +95,7 @@ calc_access <- function(
 
 	## tidy
 	acc <- acc |>
-		mutate(method = method_alias, accessibility = T001, year = !!year) |>
+		mutate(method = method_alias, accessibility = T001, year = lubridate::year(dep_datetime)) |>
 		select(-T001) |>
 		relocate(method, year, !!!group, id, accessibility)
 
@@ -148,8 +150,8 @@ calc_access_delta <- function(access_data, quantiles = FALSE) {
 			.by = "id"
 		)
 
-  ## quantiles
-	if(quantiles) {
+	## quantiles
+	if (quantiles) {
 		y1 <- min(acc_df$year)
 		acc_quantiles <- acc_df |>
 			select(d_last_access, d_max_access, id, year) |>
@@ -167,5 +169,5 @@ calc_access_delta <- function(access_data, quantiles = FALSE) {
 		)
 	}
 
-  return(acc_df)
+	return(acc_df)
 }

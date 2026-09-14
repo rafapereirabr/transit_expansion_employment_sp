@@ -227,10 +227,10 @@ export_feeds <- function(
 		stop("`year` must be NULL or a single year.")
 	}
 	# selected_year <- if (is.null(year)) rep(TRUE, nrow(spec)) else spec$year == year
-		# selected_rows <- spec$include_r5 & selected_year
-		# selected <- c(prepared_feeds[selected_rows], additional_feeds)
-		selected <- c(prepared_feeds, additional_feeds) |>
-          grep(pattern = year, x = _, value = T)
+	# selected_rows <- spec$include_r5 & selected_year
+	# selected <- c(prepared_feeds[selected_rows], additional_feeds)
+	selected <- c(prepared_feeds, additional_feeds) |>
+		grep(pattern = year, x = _, value = T)
 	if (length(selected) == 0L) {
 		stop("At least one feed must be selected for the R5 network.")
 	}

@@ -367,8 +367,8 @@ list(
 		command = build_r5r_network(
 			dir = file.path("data/r5", routing_spec$year),
 			feed_paths = r5_feeds,
-			ram = r5_resources$ram,
-			cpu = r5_resources$cpu
+			ram = as.integer(Sys.getenv("r5r_ram", "8")),
+			cpu = as.integer(Sys.getenv("r5r_cpu", "2"))
 		),
 		pattern = map(routing_spec, r5_feeds),
 		format = "file",
@@ -400,18 +400,24 @@ list(
 			mode = "TRANSIT",
 			departure_datetime = routing_spec$datetime,
 			max_duration = 90L,
-			threads = r5_resources$cpu,
-			ram = r5_resources$ram,
-			java_cpu = r5_resources$cpu
+			threads = as.integer(Sys.getenv("r5r_cpu", "2")),
+			ram = as.integer(Sys.getenv("r5r_ram", "8")),
+			java_cpu = as.integer(Sys.getenv("r5r_cpu", "2"))
 		),
 		pattern = map(r5_network, routing_spec),
-		deployment = "main"
+		deployment = "main",
+		format = "file"
 	),
 
 	## accessibility ---------------------------------------------------------------------------
 	tar_target(
 		name = ttm_bypass,
-		command = c("data/temp/ttm_transit_2012", "data/temp/ttm_transit_2025"),
+		command = c(
+			"_targets/objects/ttm_transit_e2950d2e8433a431",
+			"_targets/objects/ttm_transit_c26a0951e37e50d1",
+			"_targets/objects/ttm_transit_f851f939384786e9",
+			"_targets/objects/ttm_transit_5057e1791761c2ea"
+		),
 		format = "file"
 	),
 	tar_target(
@@ -442,7 +448,6 @@ list(
 		command = calc_access(
 			ttm = ttm_transit,
 			grid = grid_sf,
-			year = unique(ttm_transit$year),
 			crit_val = access_spec$crit_val[[1]],
 			group = "dep_datetime",
 			method = access_spec$method,

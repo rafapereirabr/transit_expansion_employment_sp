@@ -7,19 +7,23 @@
 # tar_load(access)
 # tar_load(grid_sf)
 # grid <- grid_sf
-tar_load(access_spec)
-method <- access_spec[1,]$method
+# tar_load(access_spec)
+# method <- access_spec[1, ]$method
 
 plot_access <- function(access, grid, use_delta = TRUE, years = NULL, method = NULL) {
 	if (is.null(years)) {
 		years <- unique(access$year)
 	}
 
-  if(!is.null(method)) {
-    method_abbr <- recode_values(method,
-			"cumulative_cutoff" ~ "CMATT", "cumulative_interval" ~ "CIATT", "gravity" ~ "GRATT")
-    access <- filter(access, stringr::str_detect(method, method_abbr))
-  }
+	if (!is.null(method)) {
+		method_abbr <- recode_values(
+			method,
+			"cumulative_cutoff" ~ "CMATT",
+			"cumulative_interval" ~ "CIATT",
+			"gravity" ~ "GRATT"
+		)
+		access <- filter(access, stringr::str_detect(method, method_abbr))
+	}
 
 	if (use_delta & length(grep("d_", names(access))) == 0) {
 		access <- calc_access_delta(access)
@@ -31,7 +35,7 @@ plot_access <- function(access, grid, use_delta = TRUE, years = NULL, method = N
 	contour_sf <- geobr::read_municipality(2025, 3550308)
 
 	access_syms <- rlang::syms(c("accessibility", "d_max_access"))
-  stopifnot(access_syms %in% names(access))
+	stopifnot(access_syms %in% names(access))
 
 	coreplotter <- function(yr) {
 		if (yr == min(years)) {
@@ -51,9 +55,6 @@ plot_access <- function(access, grid, use_delta = TRUE, years = NULL, method = N
 				n.breaks = 9,
 				# labels = scales::label_number(scale = 1e-6, suffix = "M"),
 				labels = scales::label_comma(big.mark = " "),
-				# breaks = c("< 400 000" = -4e5, "-250 000" = -25e4, "250 000" = 25e4, "> 400 000" = 4e5),
-				# breaks = c(-55e3, -12e3, -1200, 0, 500, 8e4, 3e4, 15e4),
-				# breaks = c(-1e5, -5e4, -25e3, -1e3, 0, 1e3, 25e3, 5e4, 1e5),
 				oob = scales::squish,
 				name = "Abs. change"
 			)
@@ -76,11 +77,11 @@ plot_access <- function(access, grid, use_delta = TRUE, years = NULL, method = N
 
 	plots_combined <- patchwork::wrap_plots(plots, guides = "collect")
 
-	if(is.null(method)) {
-      plot_path <- "figures/accessibility.png"
+	if (is.null(method)) {
+		plot_path <- "figures/accessibility.png"
 	} else {
-      method_alias <- unique(access$method)
-      plot_path <- paste0("figures/acc_", method_alias, ".png")
+		method_alias <- unique(access$method)
+		plot_path <- paste0("figures/acc_", method_alias, ".png")
 	}
 	ggsave(
 		plot = plots_combined,

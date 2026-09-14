@@ -3,6 +3,7 @@
 .Rhistory
 .RData
 .Ruserdata
+.Renviron
 Thumbs.db
 .DS_Store
 .positai
@@ -10,13 +11,14 @@ Thumbs.db
 *.png
 ~$*.xlsx
 
-rjavaenv/*
 data/*
 !data/station_openings.xlsx
 data-raw/stations_raw.xlsx
 data-raw/*.zip
 data-raw/*.rar
 data-raw/gtfs_history
+/_targets/
+rjavaenv/*
 sidequests/*
 !sidequests/*.R
 
