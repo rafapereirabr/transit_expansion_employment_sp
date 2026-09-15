@@ -118,3 +118,8 @@ Current incident recovered and console responsiveness confirmed by the user. Evi
   sandbox lock. No permanent package or configuration fix has been installed.
 - [ ] If startup latency remains disruptive, profile the synchronization report and package
   metadata checks separately. Normal startup after recovery completed in 47.67 seconds.
+
+- [ ] Track whether a future release of `openai.chatgpt` fixes repeated Git watcher failures on
+  network/UNC repositories. The current pre-release has no release-channel build; isolating Codex
+  with `extensions.experimental.affinity` restores sub-second R interaction but mitigates rather
+  than fixes the watcher.

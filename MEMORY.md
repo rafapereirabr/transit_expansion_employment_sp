@@ -213,3 +213,10 @@ with sandbox enabled completed in 47.67 seconds, and the user confirmed console 
 Recovery is not permanent recurrence prevention. An old warning reporting 1300 seconds activating
 the sandbox is consistent with the recovered wait, not evidence of a new hang. See
 `quality_reports/session_logs/2026-09-11_positron-renv-startup.md`.
+
+[LEARN:diagnostics] Slow R console submission and completion in Positron need not be an R, Ark,
+renv, or profile-state problem. On 2026-09-15 Ark completed `libr` in 338 ms while the UI waited
+seconds and the Codex extension repeatedly failed to watch Git metadata on the network/UNC
+repository. Disabling only `openai.chatgpt` made R immediate; assigning it a separate extension
+host with `extensions.experimental.affinity` preserved Codex while making `1 + 1` immediate and
+R completions sub-second. Treat extension-host contention separately from backend execution time.
