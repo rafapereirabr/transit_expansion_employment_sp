@@ -211,3 +211,7 @@ calc_ttm <- function(
 		return(ttm)
 	}
 }
+
+make_bypass <- function(path, year) {
+	path[[as.character(year)]]
+}

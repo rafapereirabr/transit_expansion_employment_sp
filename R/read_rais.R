@@ -1,9 +1,13 @@
 #' read_rais
 
-# tar_load(pilot_years)
-# tar_load(pilot_individuals)
-# year <- pilot_years[1]
-# individuals <- pilot_individuals[1]
+# # tar_load(pilot_years)
+# # tar_load(pilot_individuals)
+# tar_load(time_window)
+# tar_load(cadunico_ind)
+# # year <- pilot_years[1]
+# # individuals <- pilot_individuals[1]
+# year <- time_window[1]
+# individuals <- cadunico_ind[1]
 
 read_rais <- function(year, individuals, save_dir = NULL) {
 	if (inherits(individuals, "character")) {
@@ -31,7 +35,7 @@ read_rais <- function(year, individuals, save_dir = NULL) {
 	rais <- ipeadatalake::ler_rais(year, "vinc", cols_rais)
 
 	cpfs <- individuals |>
-		pull(cpf_recuperado)
+		pull(cpf)
 
 	rais <- rais |>
 		filter(cpf %in% cpfs & !is.na(id_estab))
@@ -43,9 +47,9 @@ read_rais <- function(year, individuals, save_dir = NULL) {
 		compute()
 
 	## add firm location
-	rais <- get_work_location(rais, 2012)
+	rais <- get_work_location(rais, year)
 
-	cad_rais <- left_join(individuals, rais, by = c("cpf_recuperado" = "cpf")) |>
+	cad_rais <- left_join(individuals, rais, "cpf") |>
 		compute()
 
 	## if more than one per year, keep only the last entry? not now, maybe downstream.
@@ -84,7 +88,7 @@ get_work_location <- function(rais_vinc, year) {
 			work_lat = lat,
 			work_lon = lon,
 			work_desvio = desvio_metros,
-			work_id = h3_09
+			work_h3_id = h3_09
 		)
 
 	rais_geo <- left_join(rais_vinc, rais_estab) |>

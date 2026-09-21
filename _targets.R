@@ -45,6 +45,11 @@ if (!dir.exists("data")) {
 	dir.create("data")
 }
 
+restricted_dir <- Sys.getenv("restricted_data")
+if (!nzchar(restricted_dir)) {
+	stop("Set the restricted_data environment variable before loading the pipeline.")
+}
+restricted_dir <- normalizePath(restricted_dir, winslash = "/", mustWork = TRUE)
 
 # targets list -------------------------------------------------------------------------------
 
@@ -80,7 +85,7 @@ list(
 	),
 	tar_target(
 		name = time_window,
-		command = c(2012:2025),
+		command = c(2011, 2015, 2019, 2024), #2012:2025
 		format = "rds"
 	),
 	tar_target(
@@ -342,21 +347,39 @@ list(
 		command = read_cad_families(
 			years = time_window,
 			munis = munis_sf,
-			save_dir = "data/temp"
+			save_dir = restricted_dir
 		),
 		format = "file"
 	),
+	tar_target(
+		name = cadunico_ind,
+		command = read_cad_individuals(
+			year = time_window,
+			families = cadunico_fam,
+			save_dir = restricted_dir
+		),
+		pattern = map(time_window),
+		format = "file",
+		deployment = "worker"
+	),
+	tar_target(
+		name = cadunico_rais,
+		command = read_rais(time_window, cadunico_ind, restricted_dir),
+		pattern = map(time_window, cadunico_ind),
+		format = "file",
+		deployment = "worker"
+	),
 
 	## routing ---------------------------------------------------------------------------------
-	tar_target(
-		name = od_station_proximity,
-		command = set_od_station_proximity(
-			origins = cadunico_fam,
-			destinations = stations_sf,
-			origin_filter = grid_sf
-		),
-		format = "rds"
-	),
+	# tar_target(
+	# 	name = od_station_proximity,
+	# 	command = set_od_station_proximity(
+	# 		origins = cadunico_fam,
+	# 		destinations = stations_sf,
+	# 		origin_filter = grid_sf
+	# 	),
+	# 	format = "rds"
+	# ),
 	tar_target(
 		name = od_grid_all,
 		command = set_od_grid_all(grid = grid_sf),
@@ -412,18 +435,21 @@ list(
 	## accessibility ---------------------------------------------------------------------------
 	tar_target(
 		name = ttm_bypass,
-		command = c(
-			"_targets/objects/ttm_transit_e2950d2e8433a431",
-			"_targets/objects/ttm_transit_c26a0951e37e50d1",
-			"_targets/objects/ttm_transit_f851f939384786e9",
-			"_targets/objects/ttm_transit_5057e1791761c2ea"
+		command = make_bypass(
+			c(
+				`2012` = "data/temp/ttm_transit_e2950d2e8433a431",
+				`2015` = "data/temp/ttm_transit_c26a0951e37e50d1",
+				`2019` = "data/temp/ttm_transit_f851f939384786e9",
+				`2025` = "data/temp/ttm_transit_5057e1791761c2ea"
+			),
+			routing_spec$year
 		),
+		pattern = map(routing_spec),
 		format = "file"
 	),
 	tar_target(
 		name = balanced_units,
-		command = list.files("_targets/objects", pattern = "ttm_transit_[^all_]", full.names = T) |>
-			arrow::open_dataset() |>
+		command = arrow::open_dataset(ttm_bypass) |>
 			distinct(from_id, year) |>
 			collect() |>
 			count(from_id) |>
@@ -446,14 +472,14 @@ list(
 	tar_target(
 		name = access,
 		command = calc_access(
-			ttm = ttm_transit,
+			ttm = ttm_bypass, #ttm_transit,
 			grid = grid_sf,
 			crit_val = access_spec$crit_val[[1]],
 			group = "dep_datetime",
 			method = access_spec$method,
 			balance_origins = FALSE
 		),
-		pattern = cross(access_spec, ttm_transit),
+		pattern = cross(access_spec, ttm_bypass),
 		deployment = "worker"
 	),
 	tar_target(
@@ -461,45 +487,46 @@ list(
 		command = plot_access(access, grid_sf, method = access_spec$method),
 		pattern = map(access_spec),
 		format = "rds"
-	),
-
-	## pilot study -----------------------------------------------------------------------------
-	tar_target(name = pilot_years, command = c(2012, 2019, 2025), format = "rds"),
-	tar_target(name = pilot_cells, command = set_study_area(stations_sf, grid_sf)),
-	tar_target(
-		name = pilot_families,
-		command = assign_treatment(cadunico_fam, pilot_cells, pilot_years)
-	),
-	tar_target(
-		name = pilot_individuals,
-		command = read_cad_individuals(pilot_years, pilot_families, "data/temp"),
-		pattern = map(pilot_years),
-		format = "file",
-		deployment = "worker"
-	),
-	tar_target(
-		name = cadunico_rais_pilot,
-		command = read_rais(pilot_years, pilot_individuals, "data/temp"),
-		pattern = map(pilot_years, pilot_individuals),
-		format = "file",
-		deployment = "worker"
-	),
-	tar_target(
-		name = panel_pilot,
-		command = make_panel(
-			cadunico_rais = cadunico_rais_pilot,
-			ttm = ttm_transit,
-			balance = TRUE,
-			years = pilot_years,
-			save_dir = "data/temp"
-		),
-		format = "file"
-	),
-	tar_target(
-		name = naive_table,
-		command = write_naive_table(panel_pilot, "tables", balanced = TRUE),
-		format = "file"
 	)
+
+	# ## pilot study -----------------------------------------------------------------------------
+	# tar_target(name = pilot_years, command = c(2012, 2019, 2025), format = "rds"),
+	# tar_target(name = pilot_cells, command = set_study_area(stations_sf, grid_sf)),
+	# tar_target(
+	# 	name = pilot_families,
+	# 	command = assign_treatment(cadunico_fam, pilot_cells, pilot_years, restricted_dir),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = pilot_individuals,
+	# 	command = read_cad_individuals(pilot_years, pilot_families, restricted_dir),
+	# 	pattern = map(pilot_years),
+	# 	format = "file",
+	# 	deployment = "worker"
+	# ),
+	# tar_target(
+	# 	name = cadunico_rais_pilot,
+	# 	command = read_rais(pilot_years, pilot_individuals, restricted_dir),
+	# 	pattern = map(pilot_years, pilot_individuals),
+	# 	format = "file",
+	# 	deployment = "worker"
+	# ),
+	# tar_target(
+	# 	name = panel_pilot,
+	# 	command = make_panel(
+	# 		cadunico_rais = cadunico_rais_pilot,
+	# 		ttm = ttm_bypass,
+	# 		balance = TRUE,
+	# 		years = pilot_years,
+	# 		save_dir = restricted_dir
+	# 	),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = naive_table,
+	# 	command = write_naive_table(panel_pilot, "tables", balanced = TRUE),
+	# 	format = "file"
+	# )
 
 	## individuals: cadunico + rais ------------------------------------------------------------
 	# tar_target(

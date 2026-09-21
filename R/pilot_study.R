@@ -12,22 +12,53 @@
 set_study_area <- function(stations, grid, access = NULL) {
 	stations <- sf_from_parquet(stations)
 
+	## remove interchange (dupli)
+	duplicates <- bind_rows(
+		stations |>
+			st_drop_geometry() |>
+			count(name_station, sort = T) |>
+			filter(n > 1) |>
+			select(name_station),
+		stations |>
+			st_drop_geometry() |>
+			filter(stringr::str_detect(name_station, "\\(LINHA")) |>
+			select(name_station)
+	)
+
+	keepers <- stations |>
+		st_drop_geometry() |>
+		select(code_station, name_station, yr_open) |>
+		inner_join(duplicates) |>
+		arrange(name_station, yr_open) |>
+		slice_min(yr_open, by = name_station) |>
+		slice_min(code_station, by = name_station)
+
 	study_stations <- stations |>
+		filter(
+			(!(name_station %in% duplicates$name_station) |
+				code_station %in% keepers$code_station) &
+				!(code_station %in% c(3029, 3100))
+		) |>
 		mutate(
 			pilot_group = case_when(
-				between(code_station, 125, 129) | between(code_station, 125, 129) ~ 4,
-				code_line == 15 & is.na(yr_open) & code_station != 98 ~ 3,
+				code_line == 2 & yr_open %in% c(2027, 2028) & code_station > 108 ~ 3,
+				code_line == 7 & yr_open == 2013 ~ 2,
+				code_line == 4 & code_station %in% c(88, 94) ~ 2,
+				code_line == 4 & code_station == 137 ~ 3,
+				code_line == 5 & code_station < 69 ~ 1, #additional
+				code_line == 5 & code_station < 90 ~ 2, #first
+				code_station %in% c(125:129, 141:142) ~ 3, #u/c or planned,
+				code_line == 15 & is.na(yr_open) & !(code_station %in% c(58, 98)) ~ 3,
+				code_line == 17 & code_station %in% c(148, 157) ~ 3,
 				code_line == 15 ~ 2,
-				code_line == 5 & code_station < 67 ~ 1
+				code_line == 19 & code_station %in% c(158, 162, 163, 169, 171) ~ 3,
+				code_line == 20 & code_station %in% c(186:189) ~ 3,
+				yr_open < 2012 ~ 0 #always
 			),
 			pilot_group_fct = factor(
 				pilot_group,
-				labels = c(
-					"Additional treatment (Metro L5)",
-					"Treatment (Metro L15)",
-					"Control (Metro L15)",
-					"Control (Metro L6)"
-				)
+				levels = c(0:3),
+				labels = c("Always Treated", "Additional treatment", "First treatment", "Never treated")
 			)
 		) |>
 		filter(!is.na(pilot_group)) |>
@@ -78,8 +109,8 @@ set_study_area <- function(stations, grid, access = NULL) {
 
 	if (!is.null(access)) {
 		access <- access |>
-			filter(period == "Post-2025") |>
-			select(id, contains("CMATT"))
+			filter(year == 2025 & method == "CMATT60") |>
+			select(id, accessibility)
 		study_rings <- inner_join(study_rings, access)
 	}
 
@@ -93,13 +124,15 @@ set_study_area <- function(stations, grid, access = NULL) {
 # ## dataviz
 # ring_contours <- study_rings |>
 # 	group_by(pilot_group, pilot_group_fct) |>
-# 	summarise(geometry = st_union(geometry))
+# 	summarise(geometry = st_union(geometry)) |>
+# 	nngeo::st_remove_holes()
 
 # transit_map +
 # 	geom_sf(data = study_rings, aes(fill = factor(ring_order)), color = NA, alpha = 0.75) +
-# 	geom_sf(data = ring_contours, fill = NA, aes(color = pilot_group_fct), linewidth = .75) +
-# 	scale_fill_viridis_d() +
-# 	scale_color_brewer(palette = "Dark2") +
+# 	geom_sf(data = ring_contours, fill = NA, aes(color = pilot_group_fct), linewidth = 1.5) +
+# 	scale_fill_viridis_d(direction = 1) +
+# 	scale_color_viridis_d(option = "inferno") +
+# 	# scale_color_brewer(palette = "Paired") +
 # 	theme_void() +
 # 	theme(legend.position = "bottom") +
 # 	labs(fill = "Proximity (hex order)", color = "Group") +
@@ -142,7 +175,7 @@ set_study_area <- function(stations, grid, access = NULL) {
 # study_area <- pilot_cells
 # time_window <- pilot_years
 
-assign_treatment <- function(families, study_area, time_window) {
+assign_treatment <- function(families, study_area, time_window, save_dir = NULL) {
 	families <- open_dataset(families)
 	study_area <- st_drop_geometry(study_area)
 	families <- families |>
@@ -158,5 +191,10 @@ assign_treatment <- function(families, study_area, time_window) {
 		)
 
 	families <- compute(families)
-	return(families)
+
+	## save
+	file_name <- "pilot_families.parquet"
+	file_path <- file.path(save_dir, file_name)
+	write_parquet_target(families, file_path, overwrite = TRUE)
+	return(file_path)
 }

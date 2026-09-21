@@ -1,7 +1,9 @@
 # read_cad_fams -------------------------------------------------------------------------------
 
+# source("R/utils.R")
 # tar_load(c(munis_sf, time_window))
 # munis <- munis_sf
+# time_window <- c(2011, 2015, 2019, 2024)
 # years <- time_window
 
 read_cad_families <- function(years, munis, save_dir = NULL) {
@@ -64,13 +66,13 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 
 # read_cad_individs ---------------------------------------------------------------------------
 
-# # tar_load(c(time_window, cadunico_fam))
-# tar_load(c(pilot_years, pilot_families))
+# tar_load(c(time_window, cadunico_fam))
+# # tar_load(c(pilot_years, pilot_families))
 # save_dir <- "data/temp"
-# # families <- cadunico_fam
-# # year <- time_window[1]
-# families <- pilot_families
-# year <- pilot_years[1]
+# families <- cadunico_fam
+# year <- time_window[1]
+# # families <- pilot_families
+# # year <- pilot_years[1]
 
 read_cad_individuals <- function(year, families, save_dir = NULL) {
 	if (inherits(families, "character")) {
@@ -83,33 +85,31 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		filter(year == !!year) |>
 		compute()
 
-	individ <- ipeadatalake::ler_cadunico(
-		100 * year + 12,
-		"pessoa",
-		harmonizado = T
-	)
+	individ <- ipeadatalake::ler_cadunico(100 * year + 12, "pessoa")
 
 	cols_ind <- c(
 		"co_familiar_fam",
+		"cpf",
+		"cpf_imputado",
 		"cpf_recuperado",
-		"co_sexo_pessoa",
+		"dt_atual_memb",
 		"dt_nasc_pessoa",
+		"co_sexo_pessoa",
 		"co_raca_cor_pessoa",
-		# 6666666666 BLOCO DE VAR BOAS QUE FALTAM NA BASE
-		# "co_principal_trab_memb",
-		# "co_trabalhou_semana_memb",
-		# "co_trabalho_12_meses_memb",
-		# "qt_meses_12_meses_memb",
-		# "vl_renda_bruta_12_meses_memb",
-		"vl_remuner_emprego_memb",
-		# "vl_renda_aposent_memb",
-		# "vl_renda_seguro_desemp_memb",
-		# "vl_renda_outras_memb"
-		"fx_renda_individual_808"
+		"co_deficiencia_memb",
+		"co_sabe_ler_escrever_memb",
+		"co_principal_trab_memb",
+		"co_trabalho_12_meses_memb",
+		"co_curso_frequenta_memb",
+		"in_dormir_rua_memb",
+		"in_dormir_albergue_memb",
+		"in_dormir_dom_part_memb",
+		"in_dormir_outro_memb"
 	)
 
 	individ <- individ |>
-		select(any_of(cols_ind))
+		select(any_of(cols_ind)) |>
+		rename(any_of(c(cpf = "cpf_imputado", cpf = "cpf_recuperado")))
 
 	## remove duplicates --- needs improvement
 	duplicate_fam <- families |>
@@ -118,25 +118,55 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		pull(co_familiar_fam)
 	stopifnot(length(duplicate_fam) == 0)
 	duplicate_ind <- individ |>
-		count(cpf_recuperado) |>
+		count(cpf) |>
 		filter(n > 1) |>
-		pull(cpf_recuperado)
+		pull(cpf)
 	matched_ind <- individ |>
-		filter(!(cpf_recuperado %in% duplicate_ind | is.na(cpf_recuperado))) |>
+		filter(!(cpf %in% duplicate_ind | is.na(cpf))) |>
 		inner_join(families)
 
-	## remove minors & relocate columns
+	## remove minors and outdated data
 	end_of_year <- paste(year, 12, 31, sep = "-") |>
 		as.Date()
 	matched_ind <- matched_ind |>
-		mutate(age = (as.integer(end_of_year) - as.integer(dt_nasc_pessoa)) / 365.25) |>
-		filter(age >= 18) |>
-		relocate(year, co_familiar_fam, cpf_recuperado, .before = everything()) |>
+		mutate(
+			age = (as.integer(end_of_year) - as.integer(dt_nasc_pessoa)) / 365.25,
+			# years_since_update = (as.integer(end_of_year) - as.integer(dt_atual_memb)) / 365.25
+		) |>
+		filter(age >= 18) |> # & years_since_update <= 2.083) |>
+		compute()
+
+	# tidy data
+	matched_ind <- matched_ind |>
+		rename(
+			id_family = co_familiar_fam,
+			code_muni_cad = cd_ibge_cadastro,
+			birthdate_cad = dt_nasc_pessoa,
+			gender_cad = co_sexo_pessoa,
+			race_cad = co_raca_cor_pessoa,
+			disability_cad = co_deficiencia_memb,
+			literate_cad = co_sabe_ler_escrever_memb,
+			main_job_status_cad = co_principal_trab_memb,
+			h3_09_cad = h3_09,
+			employed_12mo_cad = co_trabalho_12_meses_memb
+		) |>
+		mutate(
+			# student = if_else(is.na(co_curso_frequenta_memb), 0, 1),
+			unhoused = in_dormir_rua_memb +
+				in_dormir_albergue_memb +
+				in_dormir_dom_part_memb +
+				in_dormir_outro_memb,
+			last_update = dt_atualizacao_fam,
+			years_update = (as.integer(end_of_year) - as.integer(dt_atualizacao_fam)) / 365.25,
+			.keep = "unused"
+		) |>
+		relocate(year, cpf, .before = everything()) |>
+		relocate(code_muni_cad, h3_09_cad, lat, lon, desvio_metros, .after = everything()) |>
 		compute()
 
 	## check if all duplicates are gone
 	n_duplicates <- matched_ind |>
-		count(co_familiar_fam, cpf_recuperado, sort = T) |>
+		count(id_family, cpf) |>
 		filter(n > 1) |>
 		compute() |>
 		nrow()
