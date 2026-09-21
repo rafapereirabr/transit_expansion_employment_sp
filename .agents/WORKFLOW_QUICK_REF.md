@@ -32,6 +32,10 @@ Ask in natural language or name the skill, for example:
 - “Use `review-r` on `R/routing.R`.”
 - “Run `diagnose` for `ttm_transit_all`.”
 - “Use `interview-me` to formulate the executive box.”
+- “Use `research-ideation` to compare candidate questions and identification strategies.”
+- “Run `devils-advocate` on this proposed design.”
+- “Use `lit-review` to synthesize how the literature handles this identification problem.”
+- “Use `credible-claims` to calibrate what this evidence supports.”
 - “Create a `checkpoint` before we stop.”
 
 The procedure in `.agents/skills/<name>/SKILL.md` is canonical. Codex reads it from the shared
@@ -42,8 +46,10 @@ names.
 ## What was intentionally not imported
 
 The upstream workflow's Beamer, Quarto, TikZ, teaching, journal-submission, Stata, simulation, and
-R-package-development modules are not active. Add a skill only after the same multi-step workflow
-has recurred or a stable quality check is clearly needed.
+R-package-development modules are not active. Four research-reasoning skills were later adapted
+for question development, adversarial design review, literature synthesis, and claim calibration.
+Add further skills only after the same multi-step workflow has recurred or a stable quality check
+is clearly needed.
 
 Hooks and permission files are also deferred. They are product-specific and must be reviewed
 against the restricted-data protocol before installation.
