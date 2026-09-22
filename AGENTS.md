@@ -147,6 +147,10 @@ use a smoke test when available and state clearly when a full run remains pendin
 - `review-r`: read-only R and pipeline review.
 - `diagnose`: root-cause a failed or incorrect target.
 - `interview-me`: turn an ambiguous research request into an approved specification.
+- `research-ideation`: develop and compare questions, estimands, and identification strategies.
+- `devils-advocate`: stress-test a proposed design and its identifying assumptions.
+- `lit-review`: synthesize literature around claims, designs, and identification problems.
+- `credible-claims`: calibrate descriptive and causal language to the available evidence.
 - `capture-environment`: record the reproducible R environment without upgrading it.
 - `checkpoint`: write a compact cross-session handoff.
 - `commit`: verify and commit only after explicit authorization.

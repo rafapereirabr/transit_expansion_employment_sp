@@ -22,6 +22,8 @@ outputs belong in git history, `MEMORY.md`, or the relevant report—not here.
 - Initial skills for R review, diagnosis, research specification, environment capture, checkpoints,
   and explicitly authorized commits.
 - Templates for requirements specifications and session logs.
+- Adapted shared skills for research ideation, adversarial design review, identification-centered
+  literature synthesis, and calibration of credible claims, with thin Claude discovery adapters.
 
 ### Removed
 
