@@ -6,7 +6,7 @@
 
 **Members:** Gregório Luz (UC Berkeley), Rafael Pereira (Ipea), and Arthur Bazolli (Ipea), in partnership with CAF
 
-**Objective:** study how rapid-transit expansion in São Paulo affects labor-market outcomes,
+**Objective:** study how rapid transit expansion in São Paulo affects labor market outcomes,
 especially for people in socioeconomic vulnerability.
 
 CadÚnico is the main empirical source because it supplies residential locations and repeated
@@ -129,6 +129,12 @@ use a smoke test when available and state clearly when a full run remains pendin
 - After R edits, run `air format .` from the repository root so Air discovers and applies the local
   `air.toml` (tabs, 101-character line width, and the project's other settings). Do not generate a
   new Air configuration or rely on generic defaults in place of this file.
+
+## Editorial conventions
+
+- In project prose, write the established field terms `rapid transit` and `labor market` without
+  hyphens, including when they modify a following noun (for example, `rapid transit expansion` and
+  `labor market outcomes`).
 
 ## Methodological guardrails
 

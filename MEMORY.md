@@ -5,7 +5,7 @@ task list; deferred work belongs in `BACKLOG.md`.
 
 ## Research objective and products
 
-The overarching objective is to study how São Paulo's rapid-transit expansion affects labor-market
+The overarching objective is to study how São Paulo's rapid transit expansion affects labor market
 outcomes, with emphasis on people in socioeconomic vulnerability. CadÚnico is the main source
 because it provides residential addresses and repeated observations; linkage to RAIS adds detailed
 formal-employment outcomes and workplace information.
@@ -18,6 +18,47 @@ The work has three horizons:
    cutoff/buffer design remains an acceptable fallback if a stronger design is not ready.
 3. A longer-term design that treats interference, spatial spillovers, accessibility, transit feeds,
    and staggered timing more explicitly.
+
+## Causal study objective and estimand
+
+For the CAF study, causal difference-in-differences is a fixed design requirement. Cross-sectional
+comparisons and generic fixed-effects panels may support description or diagnostics, but they are
+not substitutes for an explicit intervention, comparison group, pre/post contrast and identifying
+assumptions. This does not change the separate decision that the immediate executive box remains
+descriptive and contains no DiD claims.
+
+The primary causal question is how rapid transit network expansion affects labor market outcomes
+for the socioeconomically vulnerable population resident in the eligible study area at baseline.
+The target population is fixed before the intervention. Baseline residence assigns exposure;
+subsequent residential mobility is a possible outcome or mechanism. The primary analysis must not
+condition on remaining at the same address or on reappearing in CadÚnico. Non-movers define a
+selected sensitivity population, not the main estimand.
+
+The intervention is the network expansion or clearly defined network-transition package. Modeled
+accessibility change, holding the opportunity surface fixed, is an exposure mapping that indexes
+heterogeneity in the total policy effect. It is not a continuous causal dose and its coefficient or
+curve is not the marginal causal effect of one unit of accessibility. Distance from baseline
+residence to the newly opened station or segment is a complementary primary exposure mapping and
+the closest application of Butts's spatial DiD.
+
+Each coherent intervention cohort and time window has its own estimand. The preferred substantive
+result is an accessibility-indexed policy-effect curve plus a population-weighted average over the
+baseline residents with substantively positive modeled gains. The paired distance-indexed curve is
+retained rather than treated as a disposable robustness check. If a near-zero accessibility band
+cannot plausibly identify the counterfactual trend, the causal fallback remains a distance-based or
+otherwise explicitly defined DiD; it is not a cross-section or an unstructured panel regression.
+
+The initial labor outcome panels use four-year intervals: 2011, 2015, 2019 and 2023. This does not
+change the separate 2012--2025 accessibility comparison. Exposure for the 2023 causal endpoint needs
+a 2023 transport scenario or an explicitly justified proxy; the current 2025 TTM is not automatically
+interchangeable with 2023 conditions.
+
+Formal employment and formalization are the natural primary outcomes from the CadÚnico–RAIS link.
+Unconditional formal labor income can summarize extensive- and intensive-margin changes. Wages and
+job quality conditional on employment are secondary outcomes because treatment may change who is
+formally employed. RAIS alone does not identify an effect on total or informal employment. An
+individual wage is not automatically a measure of productivity, and an average employment effect is
+not by itself evidence of inclusion; those study objectives require separate definitions.
 
 The current technical subproject is to:
 
@@ -198,6 +239,11 @@ service assumptions instead of conflating all changes in a single comparison.
 ## Corrections and workflow learnings
 
 Append durable corrections as `[LEARN:category] wrong assumption → corrected practice or fact`.
+
+[LEARN:workspace] A previously injected Codex workspace pointed to the storage-backed checkout even
+though Positron and R were opened in the local checkout → when locations disagree, use the checkout
+explicitly identified by the user as canonical and verify `git rev-parse --show-toplevel` before any
+read or write; do not infer the active project from a prior session's workspace context.
 
 [LEARN:workflow] `AGENTS.md`, `MEMORY_2.md`, and the initial `CHANGELOG.md` imported on 2026-08-24
 described the separate `aoplanduse` repository → treat imported workflow files as templates until

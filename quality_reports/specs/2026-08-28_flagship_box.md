@@ -7,7 +7,7 @@
 
 Prepare a brief box for the CAF–BID flagship chapter on transport and access to employment that
 uses the São Paulo and Santiago studies to illustrate how improvements in urban accessibility can
-translate into labor-market outcomes.
+translate into labor market outcomes.
 
 ## Source hierarchy used
 
@@ -30,7 +30,7 @@ translate into labor-market outcomes.
 - [ ] Include brief motivation/context, a general description of the methodology, principal
   findings from each case, and policy implications.
 - [ ] Use claims whose evidentiary status is explicit: descriptive, correlational, or causal.
-- [ ] Avoid presenting preliminary accessibility comparisons as causal labor-market impacts.
+- [ ] Avoid presenting preliminary accessibility comparisons as causal labor market impacts.
 - [ ] Complement rather than reproduce the flagship chapter's existing cross-city accessibility
   analysis.
 
@@ -87,7 +87,7 @@ translate into labor-market outcomes.
 
 1. Is the one-page maximum shared by São Paulo and Santiago, as the singular “un box” suggests, or
    does each case receive up to one page?
-2. Given that the new São Paulo labor-market estimates are not ready, does CAF want: (a) a clearly
+2. Given that the new São Paulo labor market estimates are not ready, does CAF want: (a) a clearly
    preliminary descriptive box now, (b) prior causal evidence plus our accessibility mechanism, or
    (c) the box only after both case studies have labor results?
 3. What is the current deadline, and who supplies/approves the Santiago half?

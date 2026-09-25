@@ -12,20 +12,42 @@ This file contains unfinished work only. Durable findings and decisions belong i
 
 ## Medium term — CAF report (Dec 2026–Jan 2027)
 
-- [ ] Finalize the CadÚnico–RAIS linkage, analysis panel, outcomes, and disclosure protocol.
-- [ ] Define residential treatment cohorts, eligible controls, exclusion buffers, and sensitivity
-  cutoffs.
-- [ ] Assess residential mobility, staggered timing, COVID-era heterogeneity, anticipation, and
-  pre-trends.
-- [ ] Compare the feasible baseline design with explicit spatial-spillover specifications.
-- [ ] Pre-specify the minimum credible fallback design that can ship by the deadline.
+- [ ] Finalize the CadÚnico–RAIS linkage, baseline cohort frame, outcome definitions and disclosure
+  protocol. Verify when absence from RAIS can be coded as no formal employment rather than failed
+  linkage or missingness.
+- [ ] Define coherent opening cohorts/windows, their no-expansion counterfactual network, outcome
+  baseline/end point, residential baseline and follow-up horizon. Do not pool overlapping windows
+  as repetitions of one estimand.
+- [ ] Build a 2023 transport/accessibility scenario for the 2023 labor endpoint, or document and
+  validate an explicit proxy; do not silently substitute the existing 2025 TTM.
+- [ ] Build the design-support table for each window: baseline people and cells, modeled
+  accessibility gains/losses, distance to new infrastructure, near-zero and outer-distance support,
+  movers, linkage retention, outcome availability and overlap among intervention neighborhoods.
+- [ ] Pre-specify the accessibility null band, positive/loss support, distance study radius and
+  unaffected comparison region using substantive and measurement criteria rather than outcome
+  significance.
+- [ ] Evaluate prior outcome trends against future exposure, anticipation, residential mobility,
+  administrative attrition, COVID-era heterogeneity, station siting and spatial interference.
+- [ ] Estimate paired nonparametric spatial DiDs: the policy-effect curve indexed by modeled
+  accessibility change and the complementary curve indexed by baseline distance to newly opened
+  stations or segments.
+- [ ] Define the population-weighted summary effect for baseline residents with substantively
+  positive accessibility gains and report it with the full curve and support.
+- [ ] Pre-specify primary formal-employment/formalization outcomes, unconditional formal earnings,
+  secondary selected job-quality outcomes, spatial inference and multiple-testing control.
+- [ ] Operationalize productivity and inclusion separately, or delimit the corresponding claims;
+  do not relabel individual wages as productivity or an average effect as inclusion.
+- [ ] Compare total-network and rail/bus component accessibility scenarios without treating
+  simulated feed decompositions as automatically causal component effects.
+- [ ] Pre-specify the minimum credible fallback DiD that can ship by the deadline, beginning with a
+  coherent distance-based opening/corridor design if the accessibility null band fails.
 
 ## Longer-term research design
 
-- [ ] Develop an interference-aware estimand connecting transit accessibility to direct and
-  spillover labor-market effects.
-- [ ] Investigate how continuous accessibility changes can enter a staggered design without being
-  reduced entirely to station-distance cutoffs.
+- [ ] Extend the baseline-resident policy estimand to distinguish direct and spillover effects under
+  an explicit interference mapping.
+- [ ] Extend the cohort/window-specific spatial DiDs to annual staggered timing and dynamic effects
+  without treating accessibility as a continuous causal dose.
 - [ ] Separate mechanisms involving employment, formalization, wages, commuting, job matching, and
   residential sorting.
 

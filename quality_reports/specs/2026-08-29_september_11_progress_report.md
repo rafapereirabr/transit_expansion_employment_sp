@@ -43,7 +43,7 @@ to the broader CAF team, supporting a 15–20 minute São Paulo report and a sub
   construction pass basic validation in time.
 - [ ] State the main assumptions and limitations of the 2012–2025 comparison, including reconstructed
   rail service and harmonized bus runtimes.
-- [ ] Avoid describing accessibility changes as estimated labor-market impacts.
+- [ ] Avoid describing accessibility changes as estimated labor market impacts.
 - [ ] End with concrete next steps and a small number of questions on which broader CAF input would
   be useful.
 - [ ] Use only disclosure-safe aggregates and figures; no confidential CadÚnico/RAIS records or
