@@ -1,13 +1,9 @@
 #' read_rais
 
-# # tar_load(pilot_years)
-# # tar_load(pilot_individuals)
 # tar_load(time_window)
-# tar_load(cadunico_ind)
-# # year <- pilot_years[1]
-# # individuals <- pilot_individuals[1]
+# tar_load(person_roster)
 # year <- time_window[1]
-# individuals <- cadunico_ind[1]
+# individuals <- person_roster
 
 read_rais <- function(year, individuals, save_dir = NULL) {
 	if (inherits(individuals, "character")) {
@@ -34,23 +30,23 @@ read_rais <- function(year, individuals, save_dir = NULL) {
 
 	rais <- ipeadatalake::ler_rais(year, "vinc", cols_rais)
 
-	cpfs <- individuals |>
-		pull(cpf)
-
 	rais <- rais |>
-		filter(cpf %in% cpfs & !is.na(id_estab))
-
-	## dealing with multiple entries: we'll drop exact duplicates & keep only active jobs @ eoy
-	rais <- rais |>
-		distinct() |>
-		filter(emp_31dez == 1) |>
+		filter(!is.na(id_estab)) |>
+		inner_join(individuals) |>
+		mutate(year = !!year) |>
 		compute()
+
+	# ## dealing with multiple entries: we'll drop exact duplicates & keep only active jobs @ eoy
+	# rais <- rais |>
+	# 	distinct() |>
+	# 	filter(emp_31dez == 1) |>
+	# 	compute()
 
 	## add firm location
 	rais <- get_work_location(rais, year)
 
-	cad_rais <- left_join(individuals, rais, "cpf") |>
-		compute()
+	# cad_rais <- left_join(individuals, rais, "cpf") |>
+	# 	compute()
 
 	## if more than one per year, keep only the last entry? not now, maybe downstream.
 	# cad_rais |>
@@ -61,7 +57,7 @@ read_rais <- function(year, individuals, save_dir = NULL) {
 	file_name <- paste0("rais_vinc_", year, ".parquet")
 	file_path <- file.path(save_dir, file_name)
 	write_parquet_target(
-		cad_rais,
+		rais,
 		file_path,
 		overwrite = TRUE
 	)

@@ -127,3 +127,22 @@ quantilize <- function(x, weights = NULL, n_qt, relative_labs = FALSE, ...) {
 	cut(x, quantiles, labs, TRUE) |>
 		factor()
 }
+
+
+# extract_ids --------------------------------------------------------------------------------
+
+# data <- targets::tar_read(family_records)
+# key <- "co_familiar_fam"
+# file_path <- file.path(Sys.getenv("restricted_data"), "fam_roster")
+extract_ids <- function(data, key, file_path) {
+	if (inherits(data, "character")) {
+		data <- arrow::open_dataset(data)
+	}
+
+	data <- data |>
+		distinct(!!sym(key)) |>
+		collect()
+
+	write_parquet_target(data, file_path, overwrite = TRUE)
+	return(file_path)
+}

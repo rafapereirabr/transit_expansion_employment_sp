@@ -60,6 +60,18 @@ formally employed. RAIS alone does not identify an effect on total or informal e
 individual wage is not automatically a measure of productivity, and an average employment effect is
 not by itself evidence of inclusion; those study objectives require separate definitions.
 
+The initial primary outcome is an indicator of formal employment as observed in RAIS. The exact RAIS
+presence rule still needs to be fixed (for example, any qualifying job during the year versus active
+employment on a reference date), and nonappearance may be coded as zero only after failed linkage and
+missingness are distinguished from no formal job. The CadÚnico employment indicator is not a primary
+outcome because it has extensive missingness and frequent discordance with RAIS.
+
+Initial accessibility implementation holds the 2019 `aopdata` land-use surface fixed across network
+scenarios. The preferred main causal specification will instead fix opportunities at each window's
+baseline $t_0$ when those inputs are available; the common 2019 surface remains a diagnostic or
+sensitivity specification. Exposure is assigned from $t_0$ residence, movers remain in the baseline
+cohort, and the analysis does not require a balanced CadÚnico panel.
+
 The current technical subproject is to:
 
 Estimate comparable morning-peak transit travel-time matrices for São Paulo in

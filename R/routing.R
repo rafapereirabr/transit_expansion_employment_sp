@@ -94,25 +94,32 @@ build_r5r_network <- function(
 
 # o-d table ----------------------------------------------------------------------------------
 
-set_od_station_proximity <- function(origins, destinations, origin_filter = NULL) {
+# library(sf)
+# source("R/utils.R")
+# tar_load(c(family_records, stations_sf, grid_sf))
+# origins = family_records
+# destinations = stations_sf
+# origin_filter = grid_sf
+
+set_od_households <- function(origins, destinations, origin_filter = NULL) {
 	## origins: cadunico families @ h3 centroid
 	origins <- arrow::open_dataset(origins)
 
 	if (!is.null(origin_filter)) {
 		allowed_hex <- sf::st_drop_geometry(origin_filter) |>
-			pull(h3_address)
+			pull(id)
 		origins <- filter(origins, h3_09 %in% allowed_hex)
 	}
 
 	origins <- origins |>
-		rename(id = h3_09) |>
-		h3_from_sf(col_name = "id") |>
-		mutate(origin = TRUE, .after = id) |>
-		st_centroid()
+		distinct(lat, lon, id_addr_cad) |>
+		st_as_sf(coords = c("lon", "lat"), crs = 4674) |>
+		st_transform(crs = 4326) |>
+		mutate(id = id_addr_cad, origin = TRUE, .keep = "unused")
 
 	destinations <- sf_from_parquet(destinations)
 	destinations <- destinations |>
-		transmute(id = as.character(code_station), origin = FALSE, geometry) |>
+		transmute(id = code_station, origin = FALSE, geometry) |>
 		st_transform(crs = 4326)
 
 	od <- bind_rows(origins, destinations) |>

@@ -6,15 +6,15 @@ options(
 	future.globals.maxSize = 1e4^1024
 )
 
-suppressPackageStartupMessages(
-	{
-		library(targets)
-		library(crew)
-		library(dplyr)
-		library(geoarrow)
-	}
-)
-
+library(targets)
+library(crew)
+# suppressPackageStartupMessages(
+# 	{
+# 		library(arrow)
+# 		library(dplyr)
+# 		library(geoarrow)
+# 	}
+# )
 
 # Set target options:
 tar_option_set(
@@ -24,6 +24,7 @@ tar_option_set(
 		"dplyr",
 		"docstring",
 		"duckspatial",
+		"dplyr",
 		"geoarrow",
 		"ggplot2",
 		"h3o",
@@ -45,11 +46,16 @@ if (!dir.exists("data")) {
 	dir.create("data")
 }
 
-restricted_dir <- Sys.getenv("restricted_data")
+restricted_dir <- Sys.getenv("restricted_data_temp")
 if (!nzchar(restricted_dir)) {
 	stop("Set the restricted_data environment variable before loading the pipeline.")
 }
 restricted_dir <- normalizePath(restricted_dir, winslash = "/", mustWork = TRUE)
+restricted_dir_2 <- Sys.getenv("restricted_data")
+if (!nzchar(restricted_dir_2)) {
+	stop("Set the restricted_data environment variable before loading the pipeline.")
+}
+restricted_dir_2 <- normalizePath(restricted_dir_2, winslash = "/", mustWork = TRUE)
 
 # targets list -------------------------------------------------------------------------------
 
@@ -85,13 +91,13 @@ list(
 	),
 	tar_target(
 		name = time_window,
-		command = c(2011, 2015, 2019, 2024), #2012:2025
+		command = c(2011:2015, 2017, 2019, 2021, 2023), #2012:2025
 		format = "rds"
 	),
 	tar_target(
 		name = routing_spec,
 		command = tibble::tibble(
-			year = c(2012L, 2015L, 2019L, 2025L),
+			year = c(2012L, 2015L, 2019L, 2023L, 2025L),
 			datetime = paste0(year, "-10-", c("03", "07", "02", "01"), " 06:50:00") |>
 				as.POSIXct(tz = "America/Sao_Paulo")
 		) |>
@@ -341,9 +347,21 @@ list(
 		deployment = "main"
 	),
 
-	## cadunico families ----------------------------------------------------------------------
+	## household data -------------------------------------------------------------------------
+	# tar_target(
+	# 	name = panel_spec,
+	# 	command = tibble::tribble(
+	# 		~pre      , ~t0  , ~t1  , ~ttm_0 , ~ttm_1 , ~landuse , job_type ,
+	# 		2011:2014 , 2015 , 2023 ,   2015 ,   2025 ,     2019 ,
+	# 		2011:2014 , 2015 , 2019 ,   2015 ,   2019 ,     2019
+	# 	) |>
+	# 		tibble::rowid_to_column("panel_id") |>
+	# 		dplyr::group_by(panel_id) |>
+	# 		tar_group(),
+	# 	iteration = "group"
+	# ),
 	tar_target(
-		name = cadunico_fam,
+		name = family_records,
 		command = read_cad_families(
 			years = time_window,
 			munis = munis_sf,
@@ -371,15 +389,15 @@ list(
 	),
 
 	## routing ---------------------------------------------------------------------------------
-	# tar_target(
-	# 	name = od_station_proximity,
-	# 	command = set_od_station_proximity(
-	# 		origins = cadunico_fam,
-	# 		destinations = stations_sf,
-	# 		origin_filter = grid_sf
-	# 	),
-	# 	format = "rds"
-	# ),
+	tar_target(
+		name = od_households_stations,
+		command = set_od_households(
+			origins = family_records,
+			destinations = stations_sf,
+			origin_filter = grid_sf
+		),
+		format = "rds"
+	),
 	tar_target(
 		name = od_grid_all,
 		command = set_od_grid_all(grid = grid_sf),
@@ -403,18 +421,20 @@ list(
 		pattern = map(routing_spec),
 		format = "file"
 	),
-	# tar_target(
-	# 	name = ttm_walk_stations,
-	# 	command = calc_ttm(
-	# 		r5_network = r5_network,
-	# 		od_table = od_station_proximity,
-	# 		mode = "WALK",
-	# 		max_duration = 180L,
-	# 		threads = r5_resources$cpu,
-	# 		ram = r5_resources$ram,
-	# 		java_cpu = r5_resources$cpu
-	# 	)
-	# ),
+	tar_target(
+		name = ttm_walk_stations,
+		command = calc_ttm(
+			r5_network = r5_network,
+			od_table = od_households_stations,
+			mode = "WALK",
+			max_duration = 60L,
+			threads = r5_resources$cpu,
+			ram = r5_resources$ram,
+			java_cpu = r5_resources$cpu
+		),
+		pattern = slice(r5_network, 1),
+		format = "file"
+	),
 	tar_target(
 		name = ttm_transit,
 		command = calc_ttm(
@@ -487,57 +507,47 @@ list(
 		command = plot_access(access, grid_sf, method = access_spec$method),
 		pattern = map(access_spec),
 		format = "rds"
-	)
-
-	# ## pilot study -----------------------------------------------------------------------------
-	# tar_target(name = pilot_years, command = c(2012, 2019, 2025), format = "rds"),
-	# tar_target(name = pilot_cells, command = set_study_area(stations_sf, grid_sf)),
-	# tar_target(
-	# 	name = pilot_families,
-	# 	command = assign_treatment(cadunico_fam, pilot_cells, pilot_years, restricted_dir),
-	# 	format = "file"
-	# ),
-	# tar_target(
-	# 	name = pilot_individuals,
-	# 	command = read_cad_individuals(pilot_years, pilot_families, restricted_dir),
-	# 	pattern = map(pilot_years),
-	# 	format = "file",
-	# 	deployment = "worker"
-	# ),
-	# tar_target(
-	# 	name = cadunico_rais_pilot,
-	# 	command = read_rais(pilot_years, pilot_individuals, restricted_dir),
-	# 	pattern = map(pilot_years, pilot_individuals),
-	# 	format = "file",
-	# 	deployment = "worker"
-	# ),
-	# tar_target(
-	# 	name = panel_pilot,
-	# 	command = make_panel(
-	# 		cadunico_rais = cadunico_rais_pilot,
-	# 		ttm = ttm_bypass,
-	# 		balance = TRUE,
-	# 		years = pilot_years,
-	# 		save_dir = restricted_dir
-	# 	),
-	# 	format = "file"
-	# ),
-	# tar_target(
-	# 	name = naive_table,
-	# 	command = write_naive_table(panel_pilot, "tables", balanced = TRUE),
-	# 	format = "file"
-	# )
+	),
 
 	## individuals: cadunico + rais ------------------------------------------------------------
-	# tar_target(
-	# 	name = cadunico_ind,
-	# 	command = read_cad_individuals(
-	# 		year = time_window,
-	# 		families = cadunico_fam,
-	# 		save_dir = "data/temp"
-	# 	),
-	# 	pattern = map(time_window),
-	# 	format = "file",
-	# 	deployment = "worker"
-	# )
+	tar_target(
+		name = person_records,
+		command = read_cad_individuals(
+			year = time_window,
+			families = family_records,
+			save_dir = restricted_dir
+		),
+		pattern = map(time_window),
+		format = "file",
+		deployment = "worker"
+	),
+	tar_target(
+		name = person_roster,
+		command = extract_ids(
+			data = person_records,
+			key = "cpf",
+			file.path(restricted_dir, "person_roster.parquet")
+		),
+		format = "file"
+	),
+	tar_target(
+		name = rais_records,
+		command = read_rais(time_window, person_roster, restricted_dir),
+		pattern = map(time_window),
+		format = "file",
+		deployment = "worker"
+	),
+	tar_target(
+		name = panel_eoy,
+		command = panelize_eoy(
+			rais_records,
+			grid_sf,
+			person_records,
+			ttm_walk_stations,
+			stations_sf,
+			family_records,
+			restricted_dir_2
+		),
+		format = "file"
+	)
 )

@@ -3,8 +3,8 @@
 # source("R/utils.R")
 # tar_load(c(munis_sf, time_window))
 # munis <- munis_sf
-# time_window <- c(2011, 2015, 2019, 2024)
-# years <- time_window
+# # time_window <- c(2011:2015, 2019, 2024)
+# years <- time_window[1:5]
 
 read_cad_families <- function(years, munis, save_dir = NULL) {
 	cad_dates <- 100 * years + 12
@@ -13,6 +13,7 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 		munis <- sf_from_parquet(munis, drop_geometry = T)
 	}
 
+	## find all families in all years
 	all_fams <- purrr::map2(
 		cad_dates,
 		years,
@@ -28,7 +29,8 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 		}
 	)
 
-	unique_fams <- purrr::reduce(all_fams, arrow::concat_tables) |>
+	# keep only those that at some point live in the study area
+	unique_fams <- purrr::reduce(all_fams, concat_tables) |>
 		filter(cd_ibge_cadastro %in% munis$code_muni) |>
 		distinct(co_familiar_fam) |>
 		pull(as_vector = T)
@@ -36,6 +38,7 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 	fams <- all_fams |>
 		purrr::map(\(x) filter(x, co_familiar_fam %in% unique_fams) |> compute())
 
+	## now read everything for selected families
 	fams <- purrr::map2(
 		fams,
 		cad_dates,
@@ -44,10 +47,11 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 		}
 	)
 
-	fams <- purrr::reduce(fams, arrow::concat_tables)
+	fams <- purrr::reduce(fams, concat_tables)
 
 	gc()
 
+	## remove duplicate entries
 	fams <- fams |>
 		distinct(
 			year,
@@ -61,15 +65,25 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 		) |>
 		compute()
 
+	## now we need an address id for ttm purposes (when using addr instead of h3)
+	addr_roster <- fams |>
+		distinct(lat, lon) |>
+		collect() |>
+		tibble::rowid_to_column("id_addr_cad")
+	sch <- schema(id_addr_cad = int64(), lat = decimal128(8, 6), lon = decimal128(8, 6))
+	addr_roster <- as_arrow_table(addr_roster, schema = sch)
+	fams <- left_join(fams, addr_roster) |>
+		compute()
+
 	write_parquet_target(fams, file.path(save_dir, "cad_fams.parquet"), T)
 }
 
 # read_cad_individs ---------------------------------------------------------------------------
 
-# tar_load(c(time_window, cadunico_fam))
+# tar_load(c(time_window, family_records))
 # # tar_load(c(pilot_years, pilot_families))
 # save_dir <- "data/temp"
-# families <- cadunico_fam
+# families <- family_records
 # year <- time_window[1]
 # # families <- pilot_families
 # # year <- pilot_years[1]
@@ -78,7 +92,7 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 	if (inherits(families, "character")) {
 		families <- arrow::open_dataset(families)
 	} else if (!inherits(families, "ArrowTabular")) {
-		families <- arrow::as_arrow_table(families)
+		families <- as_arrow_table(families)
 	}
 
 	families <- families |>
@@ -92,7 +106,6 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		"cpf",
 		"cpf_imputado",
 		"cpf_recuperado",
-		"dt_atual_memb",
 		"dt_nasc_pessoa",
 		"co_sexo_pessoa",
 		"co_raca_cor_pessoa",
@@ -100,7 +113,6 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		"co_sabe_ler_escrever_memb",
 		"co_principal_trab_memb",
 		"co_trabalho_12_meses_memb",
-		"co_curso_frequenta_memb",
 		"in_dormir_rua_memb",
 		"in_dormir_albergue_memb",
 		"in_dormir_dom_part_memb",
@@ -111,7 +123,7 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		select(any_of(cols_ind)) |>
 		rename(any_of(c(cpf = "cpf_imputado", cpf = "cpf_recuperado")))
 
-	## remove duplicates --- needs improvement
+	## remove duplicates --- zero policy for now (very few cases, not worth the trouble)
 	duplicate_fam <- families |>
 		count(co_familiar_fam) |>
 		filter(n > 1) |>
@@ -125,21 +137,21 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		filter(!(cpf %in% duplicate_ind | is.na(cpf))) |>
 		inner_join(families)
 
-	## remove minors and outdated data
+	## remove minors
 	end_of_year <- paste(year, 12, 31, sep = "-") |>
 		as.Date()
 	matched_ind <- matched_ind |>
 		mutate(
 			age = (as.integer(end_of_year) - as.integer(dt_nasc_pessoa)) / 365.25,
-			# years_since_update = (as.integer(end_of_year) - as.integer(dt_atual_memb)) / 365.25
 		) |>
-		filter(age >= 18) |> # & years_since_update <= 2.083) |>
+		filter(age >= 18) |>
 		compute()
 
 	# tidy data
 	matched_ind <- matched_ind |>
 		rename(
 			id_family = co_familiar_fam,
+			last_updated_cad = dt_atualizacao_fam,
 			code_muni_cad = cd_ibge_cadastro,
 			birthdate_cad = dt_nasc_pessoa,
 			gender_cad = co_sexo_pessoa,
@@ -148,20 +160,20 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 			literate_cad = co_sabe_ler_escrever_memb,
 			main_job_status_cad = co_principal_trab_memb,
 			h3_09_cad = h3_09,
+			lat_cad = lat, lon_cad = lon,
 			employed_12mo_cad = co_trabalho_12_meses_memb
 		) |>
 		mutate(
-			# student = if_else(is.na(co_curso_frequenta_memb), 0, 1),
+			year = !!year,
 			unhoused = in_dormir_rua_memb +
 				in_dormir_albergue_memb +
 				in_dormir_dom_part_memb +
 				in_dormir_outro_memb,
-			last_update = dt_atualizacao_fam,
-			years_update = (as.integer(end_of_year) - as.integer(dt_atualizacao_fam)) / 365.25,
+			years_update = (as.integer(end_of_year) - as.integer(last_updated_cad)) / 365.25,
 			.keep = "unused"
 		) |>
 		relocate(year, cpf, .before = everything()) |>
-		relocate(code_muni_cad, h3_09_cad, lat, lon, desvio_metros, .after = everything()) |>
+		relocate(code_muni_cad, h3_09_cad, id_addr_cad, lat_cad, lon_cad, desvio_metros, .after = everything()) |>
 		compute()
 
 	## check if all duplicates are gone
