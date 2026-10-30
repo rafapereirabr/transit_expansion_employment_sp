@@ -60,11 +60,95 @@ formally employed. RAIS alone does not identify an effect on total or informal e
 individual wage is not automatically a measure of productivity, and an average employment effect is
 not by itself evidence of inclusion; those study objectives require separate definitions.
 
-The initial primary outcome is an indicator of formal employment as observed in RAIS. The exact RAIS
-presence rule still needs to be fixed (for example, any qualifying job during the year versus active
-employment on a reference date), and nonappearance may be coded as zero only after failed linkage and
-missingness are distinguished from no formal job. The CadÚnico employment indicator is not a primary
-outcome because it has extensive missingness and frequent discordance with RAIS.
+The initial primary outcome is an indicator of a qualifying formal job active on December 31 as
+observed in RAIS. Missing or invalid CPFs are excluded and audited when the CadÚnico roster is
+constructed, before baseline cohorts are defined. For a valid cohort CPF in a fully processed RAIS
+year, no exact CPF match means `formal = 0`; `formal = NA` is reserved for source, extraction or
+coverage failures, or records whose December 31 status cannot be classified. Missing wage, hours,
+establishment or workplace geocoding must not turn an observed formal-employment record into zero.
+The CadÚnico employment indicator is not a primary outcome because it has extensive missingness and
+frequent discordance with RAIS.
+
+The CAF policy brief uses two wage outcomes. The communicable outcome is real contractual hourly
+wage among people formally employed on December 31, aggregating concurrent active jobs as total
+contractual salary divided by `(52 / 12) * total weekly contracted hours` and expressing values in
+December 2023 reais using the IPCA. It is `NA` when `formal = 0`. Because employment is itself
+affected by treatment, this conditional outcome supports wording limited to the formally employed
+population and does not by itself identify a causal wage effect for the baseline population.
+
+The complementary, more defensible outcome is an indicator for holding a formal job on December 31
+whose real contractual hourly wage is at least the median among all eligible employed members of that
+cohort's RMSP risk set at `g - 4`. The threshold is common to treated and comparison groups and does
+not change across comparison-group robustness specifications. The outcome equals zero for a valid
+non-employed person-year and `NA` when coverage or wage classification fails. It is defined for the
+full baseline cohort and may support a causal policy contrast subject to the DiD assumptions.
+Describe it literally as employment at or above the baseline median, not normatively as a good job.
+Remove exact duplicate links before aggregation and verify that the extracted contractual salary is
+standardized to a monthly unit across salary types.
+
+The policy brief also uses baseline-home-to-workplace geodesic distance as a spatial mechanism
+outcome among people formally employed on December 31. Measure distance from the fixed `g - 4`
+residential latitude and longitude to each active workplace, then average concurrent links using
+weekly contracted hours as weights. Compute the ellipsoidal distance outside R memory with DuckDB
+Spatial. Exact geodesic distance, not H3 membership, defines the 2 km treatment buffer; H3 remains
+available for territorial aggregation and candidate spatial clustering. The outcome is `NA` for
+non-employed person-years or when required geocodes
+cannot be resolved. It is conditional on formal employment and workplace geocoding, and a positive
+estimate is not interpreted as a worse commute: greater distance can reflect an expanded labor
+market search radius. Public-transit travel time is deferred because RAIS does not reveal commute
+mode and the modeled measure would combine network improvement with workplace choice.
+
+Opening cohorts use the historical calendar year of the actual station or segment opening, without
+rounding late-year openings into the following year. Because the primary employment outcome is
+measured on December 31, the opening year is the first post-treatment observation whenever service
+began by that date. `ATT(g, g)` is therefore an initial effect whose operational exposure may be
+short; preserve the exact opening date and days of operation before December 31 for interpretation
+and support diagnostics. Report it separately from the primary average beginning in the first full
+calendar year of operation, using a common follow-up horizon across included cohorts.
+
+The source population is eligible CadÚnico residents of the RMSP, so municipal borders do not cut a
+2 km treatment buffer. Baseline eligibility currently requires registration, a valid CPF and a
+usable residential geocode at `g - 4`, without an additional income cutoff. The primary population
+is age 22--60 on the package's trial-service date in `g`, calculated from birth information available
+at baseline; subsequent aging does not remove a person from the fixed cohort. Formal employment is
+measured from nationwide RAIS links for the cohort roster and is not filtered by workplace
+municipality.
+
+The causal target is the intention-to-treat effect of opening and operating new rapid transit service
+as assigned from `g - 4` residence, in a setting where planning, construction and expectations may
+already be present. Claims are therefore conditional on the pre-opening policy history and require
+explicit anticipation diagnostics; they are not the total effect of the project from announcement.
+
+The distance-based design uses rolling cohort-specific risk sets. For each opening cohort `g`,
+eligibility, residence and baseline service are measured at `g - 4`. A line-by-trial-service-date
+package is the operational event. Exact distance from the baseline residence to its station points
+defines exposure: a person is treated when new public line or station service becomes available
+within 2 km, including additional service at a previously served location. First treatment and
+additional treatment are separate baseline-service strata. Walking travel time to stations is a
+complementary exposure; whether both measures share one table or separate targets remains an
+implementation choice.
+
+Within the 2015--2023 study interventions, define `G_i` as the earliest opening year `g` for which
+person `i` is eligible in `g - 4`, is still at risk and has a baseline address newly covered by the
+opening. Once assigned, `G_i` is absorbing, so a person first treated in 2015 is previously treated
+in the 2019 risk set and cannot be first treated again. Proximity to older stations at residential
+addresses observed before a later cohort is historical baseline service, not lifetime absorbing
+treatment. The design does not attempt to recover lifetime transit-exposure histories or create an
+`ever_observed_near_station` restriction; claims concern first assigned exposure to expansions in
+the study window, conditional on each cohort''s `g - 4` residence.
+
+The primary comparison group for each cohort is the RMSP rolling risk set of eligible,
+not-yet-treated residents, subject to common-support and baseline-service strata. A local-spillover
+sensitivity excludes comparison residents between 2 and 4 km from a new opening. A stricter combined
+sensitivity also excludes comparison residents beyond 4 km whose modeled accessibility gain exceeds
+a threshold fixed from substantive and measurement criteria before outcome estimation. A
+central robustness specification restricts controls to the future Line 6 and Line 17 corridors,
+which had not entered operation during the 2011--2023 outcome window. This corridor comparison is
+not interpreted as an untreated counterfactual for the entire expansion process: planning,
+construction and anchored expectations may already affect those residents. It instead provides a
+narrower comparison for the incremental effect of opening and operation, conditional on corridor
+selection and implementation. Line 19 is not part of this central robustness pool unless its
+distinct planning status and exposure history are evaluated separately.
 
 Initial accessibility implementation holds the 2019 `aopdata` land-use surface fixed across network
 scenarios. The preferred main causal specification will instead fix opportunities at each window's
@@ -75,9 +159,10 @@ cohort, and the analysis does not require a balanced CadÚnico panel.
 The current technical subproject is to:
 
 Estimate comparable morning-peak transit travel-time matrices for São Paulo in
-2012, 2015, 2019 and 2025. The analytical departure time is 06:50 on the
-Wednesday in the first week of October: 2012-10-03, 2015-10-07, 2019-10-02 and
-2025-10-01, with a 15-minute departure window and a 60-minute maximum trip.
+2012, 2015, 2019 and 2023. The analytical departure time is 06:50 on
+2012-10-03, 2015-07-29, 2019-10-02 and 2023-10-01, with a 15-minute departure
+window and a 60-minute maximum trip. The 2015 date is the last Wednesday covered
+by that source feed; its calendar ends on Saturday, 2015-08-01.
 
 ## Current feed architecture
 
@@ -91,14 +176,38 @@ Wednesday in the first week of October: 2012-10-03, 2015-10-07, 2019-10-02 and
 - Reconstructed rail feeds use analytical agencies `METRO` and `CPTM`, including
   privately operated lines under the corresponding system. This keeps every rail
   route distinct from the SPTrans agency without modeling concession history.
-- `scenario_feed_audit` and `scenario_feed_reports` describe and validate the
-  bus-plus-reconstructed-rail scenario after transformation. The tidy audits
-  include active service at 06:50, headways, speeds, runtimes and the main model
-  assumptions.
+- `source_feed_audit`, `bus_feed_audit` and `rail_feed_audit` are tidy views of
+  `gtfstools::get_summary()` for an explicit 06:00--07:00 window. Their HTML and
+  RDS artifacts are tracked together, and the common table keeps generic feed
+  metrics rather than project-specific transformation assumptions.
+- `prepared_feed_audit` and `bus_feed_transform_audit` read tracked JSON
+  manifests with row-count changes and referential-integrity diagnostics. The
+  intermediate prepared feeds do not rerun the expensive summary calculations.
+- `scenario_feed_audit` reuses the cached bus and rail audit rows instead of
+  reopening the feeds. `scenario_feed_reports` retains the separate MobilityData
+  validation reports.
+- `scenario_calendar_overlap` uses `gtfstools::get_calendar_overlap()` as an
+  explicit gate: every selected bus feed and the reconstructed rail feed must
+  share service on the branch's analysis date before the scenario audit runs.
+- The pipeline uses `gtfstools` for active-service queries, aggregate route
+  frequencies, feed summaries and referentially complete GTFS filtering.
+  Project code remains
+  responsible for the H3 x busway-class segment speed surface and explicit rail
+  reconstruction because the package's route/trip setters do not represent
+  those analytical assumptions.
 - The pipeline exports all year-specific bus and rail feeds to one shared R5
   network under `data/r5/all`, with non-overlapping service calendars and
   year/date TTM branches. Scenario audits gate the inputs by confirming that the
   intended services are active at each analysis date.
+
+
+[LEARN:gtfs] Build routing dates by recycling a shorter vector of day strings,
+which silently changed the fifth branch to 2025-10-03 -> enumerate every full
+analysis datetime explicitly; the canonical 2025 branch is 2025-10-01.
+
+[LEARN:gtfs] Use 2015-10-07 as the common October routing date even though the
+raw 2015 feed calendar ends on 2015-08-01 -> use 2015-07-29, the last covered
+Wednesday, to preserve the weekday service pattern without extending the source calendar.
 
 ## Empirical GTFS findings
 

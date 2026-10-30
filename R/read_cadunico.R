@@ -160,7 +160,8 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 			literate_cad = co_sabe_ler_escrever_memb,
 			main_job_status_cad = co_principal_trab_memb,
 			h3_09_cad = h3_09,
-			lat_cad = lat, lon_cad = lon,
+			lat_cad = lat,
+			lon_cad = lon,
 			employed_12mo_cad = co_trabalho_12_meses_memb
 		) |>
 		mutate(
@@ -173,7 +174,15 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 			.keep = "unused"
 		) |>
 		relocate(year, cpf, .before = everything()) |>
-		relocate(code_muni_cad, h3_09_cad, id_addr_cad, lat_cad, lon_cad, desvio_metros, .after = everything()) |>
+		relocate(
+			code_muni_cad,
+			h3_09_cad,
+			id_addr_cad,
+			lat_cad,
+			lon_cad,
+			desvio_metros,
+			.after = everything()
+		) |>
 		compute()
 
 	## check if all duplicates are gone

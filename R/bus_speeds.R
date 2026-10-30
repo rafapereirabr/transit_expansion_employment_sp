@@ -216,7 +216,8 @@ extract_hpm_bus_segments <- function(feed, spec) {
 	stopifnot(nrow(feed) == 1L)
 	message("Extracting ", feed$feed_id)
 	gtfs <- read_reference_gtfs(feed$feed_path)
-	service_ids <- gtfs_active_service_ids(gtfs, feed$audit_date)
+	service_ids <- gtfstools::get_active_services(gtfs, feed$audit_date) |>
+		dplyr::pull(service_id)
 	bus_route_ids <- gtfs$routes |>
 		dplyr::filter(route_type == 3L) |>
 		dplyr::pull(route_id)

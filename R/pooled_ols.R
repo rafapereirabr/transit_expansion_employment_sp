@@ -1,18 +1,18 @@
 # # pooled ols
 # panels <- purrr::map2(
 #   t_groups, units,
-#   \(x, y) panel |> 
-#   filter(cpf %in% y) |> 
+#   \(x, y) panel |>
+#   filter(cpf %in% y) |>
 #   mutate(
 #     yr_open = coalesce(yr_open, Inf),
-#     treated = if_else(yr_open == x, 1, 0), 
+#     treated = if_else(yr_open == x, 1, 0),
 #     post = if_else(year >= x, 1, 0),
 #     post_covid = if_else(year > 2019, 1, 0),
 #     female = if_else(gender_cad == 2, 1, 0),
 #     nonwhite = if_else(race_cad == 1, 0, 1),
-#   ) |> 
-#   filter(is.infinite(yr_open) | yr_open == x) |> 
-#   select(year, cpf, female, nonwhite, yr_open, emp_31dec_rais, sal_hr_rais, treated, post) |> 
+#   ) |>
+#   filter(is.infinite(yr_open) | yr_open == x) |>
+#   select(year, cpf, female, nonwhite, yr_open, emp_31dec_rais, sal_hr_rais, treated, post) |>
 #   compute()
 # )
 
@@ -50,5 +50,4 @@
 # )
 
 # purrr::map(ols, summary)
-
 

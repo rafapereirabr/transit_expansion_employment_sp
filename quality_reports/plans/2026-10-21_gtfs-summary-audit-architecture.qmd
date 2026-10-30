@@ -1,0 +1,80 @@
+---
+title: "GTFS summary audit architecture"
+date: 2026-10-21
+status: COMPLETED
+format: html
+---
+
+## Objective
+
+Replace the duplicated, wide GTFS audit calculations with a common tidy summary
+derived primarily from `gtfstools::get_summary()`, using one explicit service
+window from 06:00:00 to 07:00:00. Keep project-specific transformation metadata
+in separate manifests and reuse feed-level summaries in scenario audits.
+
+## Decisions
+
+- Keep one row per feed, stage, analysis date and time window.
+- Use `date`, `from` and `to` directly; do not retain a second 15-minute window.
+- Use `get_summary()` for raw source feeds and final bus and rail feeds.
+- Do not run the expensive summary for intermediate prepared feeds.
+- Audit prepared feeds with tracked transformation manifests, row-count deltas
+  and referential-integrity checks.
+- Store project-specific bus and rail transformation assumptions outside the
+  generic feed-summary columns.
+- Build scenario audits by combining previously computed bus and rail audits.
+- Do not hard-code a machine-specific Pandoc path. The execution environment
+  must expose Pandoc through `RSTUDIO_PANDOC` or the normal R Markdown lookup.
+
+## Implementation
+
+1. Add a wrapper that runs `get_summary()` for a feed and writes its returned
+   object plus generated HTML assets to a dedicated stage/year directory.
+2. Add a tidier that converts the returned totals and distributions into a
+   compact one-row tibble with explicit units in column names.
+3. Extend prepared-feed manifests with input/output row counts and orphan-key
+   diagnostics; track the JSON manifests as their own file target.
+4. Add equivalent bus transformation manifests and track them.
+5. Add source, bus and rail summary-file targets and corresponding tidy audit
+   targets.
+6. Replace the scenario audit recalculation with a bind/filter of cached bus and
+   rail audit rows, guarded by the existing calendar-overlap target.
+7. Remove superseded custom audit calculations only after the new summaries
+   reproduce the agreed 2015 benchmark.
+
+## Verification
+
+- Parse all edited R files and `_targets.R`.
+- Run `air format .` and report the known unrelated sidequest parse failure if
+  it remains.
+- Build the source, prepared, bus and rail audit targets without invoking R5.
+- Confirm every audit row uses 06:00:00--07:00:00 and the expected analysis date.
+- Confirm prepared and bus manifests have zero orphan identifiers.
+- Confirm the 2015 source speed and headway summaries match the direct
+  `get_summary()` benchmark.
+- Confirm scenario audits reuse the bus/rail audit schema and pass the calendar
+  overlap gate.
+
+## Non-goals
+
+- Do not rebuild travel-time matrices or R5 networks.
+- Do not snapshot `renv`.
+- Do not modify raw GTFS archives.
+
+## Verification results
+
+- Built `source_feed_summary_files` and `source_feed_audit` for all four years.
+- Built prepared-feed manifests and `prepared_feed_audit`; all orphan-key counts
+  are zero.
+- Rebuilt the four bus feeds, tracked their manifests and built both the
+  transformation audit and `get_summary()` audit; all orphan-key counts are zero.
+- Rebuilt four rail feeds and their summary reports.
+- Built four calendar-overlap branches and four scenario-audit branches without
+  invoking R5. Each scenario has one bus and one synthetic-rail row.
+- Confirmed all source, bus and rail rows use 06:00:00--07:00:00 and the intended
+  analysis dates, including 2015-07-29.
+- Confirmed the source, bus and rail schemas have 37 columns and no missing
+  values for the current feeds; prepared and bus-transform audits have 19 and
+  13 columns, respectively.
+- `air format .` formatted the parseable R files and stopped at the pre-existing
+  syntax error in `sidequests/rasc raisss.R`.

@@ -11,13 +11,14 @@ Thumbs.db
 *.png
 ~$*.xlsx
 
+/_targets/*
 data/*
 !data/station_openings.xlsx
 data-raw/stations_raw.xlsx
 data-raw/*.zip
 data-raw/*.rar
 data-raw/gtfs_history
-/_targets/
+docs/*
 rjavaenv/*
 sidequests/*
 !sidequests/*.R

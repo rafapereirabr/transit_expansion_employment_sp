@@ -66,7 +66,10 @@ analysis_windows ──────────→ baseline_cohorts ──→ wi
 - `source_year_spec`: explicit CadÚnico and RAIS extraction years. Do not reuse routing years as
   labor-data years.
 - `analysis_windows`: one row per causal window, including `window_id`, `t0`, `t1`, required prior
-  outcome years, routing scenario years and land-use year.
+  outcome years, routing scenario years and land-use year. Preserve the exact infrastructure
+  opening date, use its calendar year as the first post-treatment year for the December 31 outcome,
+  and derive days of operation before that first outcome snapshot. Do not round late-year openings
+  into the following cohort.
 - `rais_outcome_spec`: define whether the primary indicator means a qualifying job active on
   December 31, any qualifying job during the year, or another rule.
 - `eligibility_spec`: baseline age, geography, identifier and geocode requirements.
@@ -110,13 +113,50 @@ The primary person-year table must distinguish:
 - `formal = 0`: validly searched and no qualifying formal job found;
 - `formal = NA`: linkage or source coverage does not support interpreting absence as zero.
 
+The initial rule is a qualifying formal job active on December 31. Missing or invalid CPFs are
+excluded and audited before baseline-cohort construction rather than represented as missing
+outcomes. For each valid roster CPF in a fully processed RAIS year, the person-year table must start
+from the complete CPF roster and use an exact left join to RAIS: no matching qualifying record is
+`formal = 0`. Use `formal = NA` only when source coverage, extraction completeness or active-status
+classification is not established. Determine `formal` before applying wage, hours, establishment or
+workplace-geocoding validity filters; failures in those secondary fields leave `formal = 1` and make
+only the affected secondary outcomes unavailable.
+
 Workplace geocoding must not determine inclusion in the primary formal-employment outcome. Attach
 workplace data only to the separate job-level or secondary-outcome tables.
+
+#### Outcome comparison and sequencing
+
+| Outcome | Measures | Main advantage | Main limitation | Workplan priority |
+|---|---|---|---|---|
+| Formal employment on December 31 | Point prevalence | Simple and communicable | Depends on one reference date | Initial |
+| Any formal employment during the year | Any formal insertion | Captures short spells | Treats one day and a full year alike | Deferred diagnostic |
+| Days or month-equivalents in formal employment | Intensity of formal attachment | Uses the full annual employment trajectory | Requires careful reconstruction and union of overlapping job spells | Deferred secondary outcome |
+| Quarterly or monthly formal-employment panel | Timing and dynamics | Can distinguish entry, exit and persistence | Strong serial correlation and greater analytical complexity | Deferred extension |
+
+The initial wage outcomes are: (1) real contractual hourly wage among people formally employed on
+December 31, and (2) an indicator for formal employment at or above the cohort-specific employed-
+worker median at `g - 4`. For (1), remove exact duplicate links and aggregate concurrent active jobs
+as total contractual salary divided by `(52 / 12) * total weekly contracted hours`; use `NA` for
+valid non-employed person-years. For (2), use zero for valid non-employed person-years and `NA` only
+when coverage or wage classification fails. Express wages and frozen baseline thresholds in
+December 2023 reais using the IPCA. Before implementation, verify that extracted contractual salary
+is standardized to a monthly unit across salary types. Treat (1) as conditional on observed formal
+employment and use (2) for the full-cohort policy contrast.
 
 ### Window-specific analytical data
 
 - `baseline_cohorts`: branch over `analysis_windows`; select eligibility and residence using only
-  the CadÚnico snapshot at `t0`.
+  the CadÚnico snapshot at `g - 4`. Construct a rolling risk set for each opening cohort. Define
+  `G_i` as the earliest 2015--2023 opening year for which an eligible, still-at-risk person''s
+  baseline address is newly covered by the opening; keep `G_i` absorbing in later risk sets. Treat
+  proximity to older stations at earlier observed addresses as historical baseline service, not as
+  lifetime treatment, and do not require an `ever_observed_near_station` history. Retain all
+  eligible not-yet-treated municipal residents as the primary control pool, subject to explicit
+  common-support and baseline-service restrictions. Also flag baseline residence in the future
+  Line 6 and Line 17 corridors for the central robustness specification; this alternative estimates
+  an opening/operation contrast conditional on planning and implementation. Keep Line 19 separate
+  until its different planning and exposure history has been assessed.
 - `window_outcomes`: join each baseline cohort to `rais_person_year` for the required baseline,
   follow-up and prior-trend years. Do not require follow-up CadÚnico observation.
 - `mobility_audit`: describe later observed residences without changing baseline exposure or primary
@@ -164,10 +204,14 @@ inside CadÚnico or RAIS readers.
 
 ### Phase 5 — exposure interfaces
 
-1. Join distance exposure by baseline residence and opening cohort.
-2. Join accessibility change by baseline H3 and window.
-3. Assert many-to-one joins from person rows to exposure rows.
-4. Keep restricted person-level panels under `restricted_dir`; export only approved aggregates.
+1. Compute straight-line distance from each `g - 4` residence to station points and flag new
+   coverage by the 2 km buffer for each opening cohort.
+2. Join walking travel time to stations as a complementary exposure. It may share the exposure
+   table with straight-line distance or use a separate target, provided keys and provenance remain
+   explicit.
+3. Join accessibility change by baseline H3 and window.
+4. Assert many-to-one joins from person rows to exposure rows.
+5. Keep restricted person-level panels under `restricted_dir`; export only approved aggregates.
 
 ## Required invariants
 

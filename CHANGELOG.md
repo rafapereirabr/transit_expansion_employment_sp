@@ -9,12 +9,16 @@ outputs belong in git history, `MEMORY.md`, or the relevant report—not here.
 
 - Replaced imported `aoplanduse` instructions with project-specific, model-agnostic guidance.
 - Established distinct responsibilities for `AGENTS.md`, `MEMORY.md`, `BACKLOG.md`, and this file.
+- Standardized new non-trivial work plans on canonical QMD sources with a shared, self-contained
+  HTML format, while preserving historical Markdown plans.
 - Added a minimal `CLAUDE.md` bridge so Claude Code follows the same constitution as Codex.
 - Reorganized the backlog around the executive box, CAF report, longer-term research design, and
   accessibility-pipeline dependencies.
 
 ### Added
 
+- Added a repository-relative PowerShell adapter and operating rule for reliable Codex patching
+  on Windows mapped-drive workspaces without persisting the backing UNC path.
 - Shared workflow material under `.agents/`.
 - Thin Claude Code discovery adapters under `.claude/skills/`; all procedure bodies remain
   canonical under `.agents/skills/`.

@@ -33,7 +33,8 @@ descriptive executive box.
 - `MEMORY.md`: durable decisions, findings, and `[LEARN:category] wrong → right` corrections.
 - `BACKLOG.md`: unfinished work, organized by deliverable or technical dependency.
 - `CHANGELOG.md`: changes to the agents/workflow infrastructure only.
-- `quality_reports/plans/`: plans for non-trivial tasks.
+- `quality_reports/plans/`: plans for non-trivial tasks. Use QMD for new plans; historical
+  Markdown plans remain valid.
 - `quality_reports/session_logs/`: decisions, alternatives, blockers, and handoff context.
 
 The `targets` DAG (`_targets.R` plus `R/*.R`) is the source of truth for what the pipeline builds.
@@ -44,12 +45,24 @@ promote work into the DAG only after the approach is accepted.
 
 - Read relevant parts of `MEMORY.md` and `BACKLOG.md` before substantial work.
 - For non-trivial changes, save a plan to
-  `quality_reports/plans/YYYY-MM-DD_short-description.md` before implementation.
+  `quality_reports/plans/YYYY-MM-DD_short-description.qmd` before implementation. The QMD source
+  is canonical; render a self-contained HTML copy when it is useful for circulation.
 - Preserve user changes in a dirty worktree. Inspect `git status` and the relevant diff first.
 - Implement, verify, and report. Do not commit, push, open a PR, or merge without explicit user
   authorization.
 - Record durable corrections in `MEMORY.md`; record pending work in `BACKLOG.md`, not memory.
 - Use the shared rules and skills under `.agents/`. They are written to be model-agnostic.
+
+### Windows network-workspace compatibility
+
+The canonical checkout may be opened through a mapped drive. Keep repository commands and
+documentation relative to the checkout: do not resolve, print, or persist the backing UNC path.
+When Codex runs on Windows against this mapped-drive checkout, its restricted-token sandbox cannot
+reliably enter or modify the workspace. Codex should therefore use the mapped-drive workspace as
+the explicit working directory and request the required sandbox escalation on the first repository
+shell call, rather than retrying a known-to-fail sandboxed call. For patches, use
+`.agents/scripts/invoke_repo_patch.ps1`; the native patch tool may reject network-backed writable
+roots. This is a tool compatibility rule, not permission to access files outside the repository.
 
 ## Data security
 

@@ -13,11 +13,36 @@ This file contains unfinished work only. Durable findings and decisions belong i
 ## Medium term — CAF report (Dec 2026–Jan 2027)
 
 - [ ] Finalize the CadÚnico–RAIS linkage, baseline cohort frame, outcome definitions and disclosure
-  protocol. Verify when absence from RAIS can be coded as no formal employment rather than failed
-  linkage or missingness.
+  protocol. Implement and audit the December 31 rule: exclude missing or invalid CPFs before cohort
+  construction; code no exact RAIS match as zero only for a valid CPF-year covered by a completed
+  extraction; reserve `NA` for source, extraction, coverage or classification failures; and determine
+  formal employment before filtering wages, hours, establishments or workplace geocodes.
 - [ ] Define coherent opening cohorts/windows, their no-expansion counterfactual network, outcome
-  baseline/end point, residential baseline and follow-up horizon. Do not pool overlapping windows
-  as repetitions of one estimand.
+  baseline/end point, residential baseline and follow-up horizon. Use the actual opening year as the
+  first post-treatment year for the December 31 outcome, retain exact opening dates and days of
+  operation for diagnostics, and implement rolling risk sets with eligibility and residence at
+  `g - 4`. Use RMSP CadÚnico residents aged 22--60 on the package's trial-service date in `g`, with a
+  valid CPF and usable baseline geocode and no additional income cutoff. Define
+  line-by-trial-service-date opening packages and
+  assign `G_i` at the first eligible 2015--2023 package that adds public service within 2 km of the
+  baseline address, then keep that assignment absorbing across later risk sets. Separate first from
+  additional treatment using baseline service. Do not
+  impose an `ever_observed_near_station` history or pool overlapping windows as repetitions of one
+  estimand. Use eligible not-yet-treated RMSP residents in the primary control risk set,
+  subject to common-support and baseline-service restrictions. Implement a central robustness
+  specification using the future Line 6 and Line 17 corridors as controls, and interpret it as the
+  incremental effect of opening/operation conditional on planning and implementation rather than
+  as the total effect of the expansion process. Evaluate Line 19 separately before adding it to any
+  planned-corridor control pool.
+- [ ] Pre-specify spillover sensitivities. First exclude controls between 2 and 4 km from a new
+  opening. Then use a stricter combined specification that also excludes controls beyond 4 km with
+  substantively large modeled accessibility gains, fixing the gain threshold without outcome-based
+  selection. Record but defer the ever-treated-only comparison. Confirm with CAF whether to include
+  pre-specified fictitious opening dates for the Line 6 and Line 17 corridors as placebo diagnostics.
+- [ ] Audit the opening catalog before cohort construction: distinguish new stations, new line
+  service at existing stations, infill stations, reforms and reopenings; verify trial and full-service
+  dates; and decide whether the 2014 Line 8 Amador Bueno/Santa Rita reopening merits a separate case
+  study outside the pooled 2015--2023 design.
 - [ ] Build a 2023 transport/accessibility scenario for the 2023 labor endpoint, or document and
   validate an explicit proxy; do not silently substitute the existing 2025 TTM.
 - [ ] Build the design-support table for each window: baseline people and cells, modeled
@@ -33,8 +58,26 @@ This file contains unfinished work only. Durable findings and decisions belong i
   stations or segments.
 - [ ] Define the population-weighted summary effect for baseline residents with substantively
   positive accessibility gains and report it with the full curve and support.
-- [ ] Pre-specify primary formal-employment/formalization outcomes, unconditional formal earnings,
-  secondary selected job-quality outcomes, spatial inference and multiple-testing control.
+- [ ] Implement the two agreed wage outcomes: real contractual hourly wage among workers formally
+  employed on December 31, and an indicator for formal employment at or above the cohort-specific
+  median among all eligible employed members of the RMSP risk set at `g - 4`. Aggregate concurrent
+  active links using total contractual salary
+  over `(52 / 12) * total weekly hours`, remove exact duplicate links, deflate to December 2023 reais
+  with the IPCA, and verify that contractual salary is standardized to a monthly unit across salary
+  types. Report the first outcome as conditional on observed formal employment; use the second for
+  the full-cohort policy contrast. Pre-specify spatial inference and multiple-testing control.
+- [ ] Implement baseline-home-to-workplace geodesic distance among workers formally employed on
+  December 31. Use `g - 4` residential latitude and longitude, workplace coordinates and an
+  hours-weighted mean across concurrent active links. Compute with DuckDB Spatial outside R memory;
+  use exact geodesic distance for treatment and the outcome, reserving H3 for aggregation and
+  candidate spatial clustering. Audit
+  missing workplace geocodes separately and describe the outcome as a conditional spatial mechanism,
+  not as observed commute distance or travel time.
+- [ ] If time permits, analyze people aged 18--21 on the package's trial-service date as a separate
+  school-to-work estimand; keep ages 22--60 on that date as the primary population.
+- [ ] After the initial annual analysis, evaluate secondary formal-employment attachment outcomes:
+  annual days or month-equivalents employed and, if useful, quarterly or monthly panels. Keep
+  hourly remuneration in the initial outcome set rather than deferring it with these extensions.
 - [ ] Operationalize productivity and inclusion separately, or delimit the corresponding claims;
   do not relabel individual wages as productivity or an average effect as inclusion.
 - [ ] Compare total-network and rail/bus component accessibility scenarios without treating

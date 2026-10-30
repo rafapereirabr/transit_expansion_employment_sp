@@ -1,0 +1,312 @@
+---
+title: CAF labor outcomes
+subtitle: Execution plan and current-pipeline diagnosis
+date: 2026-10-19
+---
+
+Status: agreed analytical specification; implementation pending
+
+This document has equivalent Portuguese and English versions for circulation. The diagnosis is
+read-only: no analytical R code was changed.
+
+## Versão em português
+
+### Objetivo e população
+
+O produto é um policy brief para a CAF sobre como a expansão de rapid transit em São Paulo afeta
+resultados no labor market da população vulnerável observada no CadÚnico. A população de cada coorte
+é fixada em `g - 4`, usando residência e elegibilidade de baseline. Mudanças residenciais posteriores
+não retiram a pessoa da coorte.
+
+O desenho principal é um DiD por coortes de abertura. O tratamento é atribuído pela primeira abertura
+elegível entre 2015 e 2023 que passa a cobrir a residência de baseline em um raio de 2 km. A atribuição
+é absorvente. O grupo de comparação principal contém residentes elegíveis do município ainda não
+tratados; os futuros corredores das Linhas 6 e 17 formam uma comparação mais restrita.
+
+### Outcomes acordados
+
+1. Emprego formal em 31 de dezembro
+   - Indicador primário para a coorte completa.
+   - CPF válido sem vínculo RAIS elegível em ano com cobertura completa recebe zero.
+   - Falha de fonte, extração, cobertura ou classificação recebe `NA`.
+   - Falhas de salário, horas ou geocodificação não convertem emprego observado em zero.
+
+2. Salário-hora contratual real
+   - Outcome comunicável, condicionado a emprego formal em 31 de dezembro.
+   - Para vínculos simultâneos ativos:
+
+     `soma dos salários mensais / [(52 / 12) * soma das horas semanais]`.
+
+   - Padronizar `salario` para unidade mensal usando `tipo_salario`.
+   - Deflacionar pelo IPCA para reais de dezembro de 2023.
+   - Não empregados recebem `NA`.
+   - Linguagem: variação entre os formalmente empregados, sem alegar efeito salarial para toda a
+     população de baseline.
+
+3. Emprego formal acima da mediana de baseline
+   - Indicador para a coorte completa.
+   - Limiar único por coorte: mediana do salário-hora real entre empregados elegíveis em `g - 4`.
+   - Não empregados válidos recebem zero; falhas de cobertura ou classificação salarial recebem
+     `NA`.
+   - Linguagem literal: emprego acima da mediana de baseline, não bom emprego.
+
+4. Distância geodésica entre residência inicial e trabalho
+   - Outcome espacial secundário, condicionado a emprego formal e geocodificação do trabalho.
+   - Origem fixa: latitude e longitude residenciais em `g - 4`.
+   - Destino: coordenadas de cada vínculo ativo em 31 de dezembro.
+   - Vínculos simultâneos: média ponderada pelas horas semanais contratadas.
+   - Cálculo fora da memória com DuckDB Spatial e `ST_Distance_Spheroid`.
+   - H3 permanece para tratamento, agregação territorial e clusterização; não usar saltos H3 como
+     distância.
+   - Distância maior não significa pior deslocamento. Pode indicar acesso a uma área de busca de
+     emprego mais ampla.
+
+Tempo modelado por transporte público fica fora da primeira versão: RAIS não informa o modo de
+deslocamento, e a medida misturaria mudanças na rede com mudanças de local de trabalho.
+
+### Vínculos RAIS, duplicatas e chaves
+
+- Preservar duas chaves:
+  - empregador legal: `tipo_estab + id_estab + cei_vinc`;
+  - local do empregador: `tipo_estab + id_estab + cei_vinc + codemun`.
+- Usar a chave de local para deduplicação espacial e geocodificação, após padronizar ausências,
+  sentinelas, tipos e zeros à esquerda.
+- Identidade candidata do vínculo: CPF, chave de local, tipo de vínculo, admissão e desligamento.
+- Salário, horas, ocupação e tipo de salário são atributos diagnósticos, não identificadores.
+- Remover apenas duplicatas exatas automaticamente. Casos incompatíveis ou extremos recebem flags e
+  entram na auditoria; não eliminar toda a trajetória da pessoa por padrão.
+
+### Inferência e linguagem
+
+- Unidade analítica: pessoa.
+- Cluster principal no indivíduo e cluster espacial adicional no H3 de baseline em resolução 7,
+  condicionado a suporte e número adequados de clusters.
+- Salário-hora e distância são outcomes condicionais e sujeitos a mudança de composição dos
+  empregados. O indicador acima da mediana mantém os não empregados na coorte e sustenta melhor o
+  contraste de política, sob as hipóteses do DiD.
+- O relatório deve separar resultados causais do desenho, associações condicionais e mecanismos.
+
+### Arquitetura proposta do pipeline
+
+1. Especificações: anos, janelas, elegibilidade, regras RAIS, deflator e catálogo de qualidade.
+2. CadÚnico: snapshots, flags de identidade, roster de CPFs válidos e auditoria de linkage.
+3. RAIS-vínculo: extração anual, padronização, duplicatas exatas e flags de conflitos.
+4. RAIS pessoa-ano: emprego, salário-hora, indicador acima da mediana e disponibilidade por outcome.
+5. Coortes e exposição: risk sets em `g - 4`, tratamento absorvente e residência fixa.
+6. Outcome espacial: distância no DuckDB e agregação pessoa-ano ponderada por horas.
+7. Estimação: suporte, pré-tendências, DiD por coortes, inferência e tabelas do policy brief.
+
+### Auditoria e accountability
+
+Não deve existir uma única lista cumulativa de pessoas ruins. A auditoria terá três objetos:
+
+1. `quality_rule_spec`: catálogo com regra, fonte, granularidade, escopo, ação e ordem.
+2. `quality_flags`: tabela restrita longa com CPF, ano ou janela, regra e outcome afetado. A
+   granularidade pode ser vínculo, pessoa-ano, pessoa ou pessoa-janela.
+3. `sample_flow`: tabela agregada com universo, unidade, denominador, total sinalizado, novas
+   exclusões marginais, total acumulado e total restante.
+
+Cada regra distingue uma ação: exclusão de identidade ou elegibilidade; remoção de duplicata exata;
+outcome específico indisponível; ou flag diagnóstica sem exclusão. O fluxo mostra flags brutas
+sobrepostas e a primeira razão exclusiva de exclusão em ordem predefinida. Contagens por tratamento
+só aparecem depois da atribuição e são verificadas para assimetria temporal ou espacial. Tabelas com
+CPF permanecem no armazenamento restrito; apenas agregados aprovados podem sair.
+
+## English version
+
+### Objective and population
+
+The product is a CAF policy brief on how rapid transit expansion in São Paulo affects labor market
+outcomes among the vulnerable population observed in CadÚnico. Each cohort population is fixed at
+`g - 4`, using baseline residence and eligibility. Later residential mobility does not remove a
+person from the cohort.
+
+The main design is an opening-cohort DiD. Treatment is assigned at the first eligible opening between
+2015 and 2023 that newly covers the baseline residence within 2 km, and remains absorbing. The main
+comparison pool contains eligible municipal residents who are not yet treated; future Line 6 and
+Line 17 corridors provide a narrower comparison.
+
+### Agreed outcomes
+
+1. Formal employment on December 31
+   - Primary full-cohort indicator.
+   - A valid CPF with no eligible RAIS link in a fully covered year receives zero.
+   - Source, extraction, coverage or classification failure receives `NA`.
+   - Missing wage, hours or geocoding never changes observed employment to zero.
+
+2. Real contractual hourly wage
+   - Communicable outcome conditional on formal employment on December 31.
+   - Concurrent links use `sum of monthly wages / [(52 / 12) * sum of weekly hours]`.
+   - Standardize `salario` to a monthly unit using `tipo_salario`.
+   - Deflate with the IPCA to December 2023 reais.
+   - Non-employed person-years receive `NA`.
+   - Wording is limited to changes among formally employed workers.
+
+3. Formal employment above the baseline median
+   - Full-cohort indicator with one threshold per cohort.
+   - The threshold is the real hourly-wage median among eligible employed workers at `g - 4`.
+   - Valid non-employed person-years receive zero; coverage or wage-classification failures receive
+     `NA`.
+   - Describe it literally as employment above the baseline median, not a good job.
+
+4. Geodesic distance from baseline residence to workplace
+   - Secondary spatial outcome conditional on formal employment and workplace geocoding.
+   - Use fixed `g - 4` residential coordinates and every active December 31 workplace.
+   - Average concurrent links using weekly contracted hours.
+   - Compute out of memory with DuckDB Spatial and `ST_Distance_Spheroid`.
+   - Retain H3 for treatment, aggregation and clustering, not as the distance metric.
+   - Greater distance is not interpreted as a worse commute.
+
+Modeled public-transit travel time is deferred: RAIS does not observe commute mode, and the measure
+would combine network changes with workplace changes.
+
+### RAIS links, duplicates and keys
+
+- Preserve a legal-employer key `tipo_estab + id_estab + cei_vinc` and an employer-place key that
+  additionally includes `codemun`.
+- Normalize missing values, sentinels, types and leading zeros before key construction.
+- Candidate link identity combines CPF, place key, link type, admission date and separation date.
+- Wage, hours, occupation and salary type are diagnostic attributes, not identifiers.
+- Remove only exact duplicates automatically. Flag conflicting or extreme cases without discarding
+  a person's entire trajectory by default.
+
+### Inference and claims
+
+- Analytical unit: person.
+- Cluster at the individual level and add a baseline H3 resolution 7 spatial cluster, subject to
+  adequate support and cluster counts.
+- Hourly wage and distance are conditional outcomes and vulnerable to changing worker composition.
+  The above-baseline-median indicator retains non-employed people and better supports the policy
+  contrast, conditional on the DiD assumptions.
+- Separate design-based causal results, conditional associations and mechanisms.
+
+### Proposed pipeline architecture
+
+1. Specifications: years, windows, eligibility, RAIS rules, deflator and quality catalog.
+2. CadÚnico: snapshots, identity flags, valid-CPF roster and linkage audit.
+3. Link-level RAIS: extraction, standardization, exact duplicates and conflict flags.
+4. Person-year RAIS: employment, hourly wage, above-median indicator and outcome availability.
+5. Cohorts and exposure: `g - 4` risk sets, absorbing treatment and fixed residence.
+6. Spatial outcome: DuckDB distance and hours-weighted person-year aggregation.
+7. Estimation: support, pretrends, cohort DiD, inference and policy-brief tables.
+
+### Audit and accountability
+
+There should be no single cumulative list of bad people. The audit has three objects:
+
+1. `quality_rule_spec`: rule, source, grain, scope, action and display order.
+2. `quality_flags`: restricted long table with CPF, year or window, rule and affected outcome.
+3. `sample_flow`: aggregate universe, counting unit, denominator, total flagged, marginal new
+   exclusions, cumulative exclusions and remaining observations.
+
+Each rule identifies one action: identity or eligibility exclusion; exact-duplicate removal;
+outcome-specific unavailability; or a diagnostic flag without exclusion. Report both overlapping
+gross flags and the mutually exclusive first exclusion reason under a predefined order. Produce
+treatment-group counts only after assignment and inspect temporal and spatial asymmetry. CPF-level
+tables remain restricted; only approved aggregates may leave storage.
+
+## Checklist for the next coding steps
+
+### Slice 1: sources and accountability
+
+- [ ] Add `tipo_estab` and `tipo_salario` to RAIS extraction.
+- [ ] Make every join key explicit and assert its cardinality.
+- [ ] Build the valid-CPF roster before cohort construction; count invalid, missing and conflicting
+      identifiers.
+- [ ] Separate RAIS coverage from absence of a qualifying job.
+- [ ] Create `quality_rule_spec`, long `quality_flags` and aggregate `sample_flow`.
+- [ ] Make audit outputs explicit targets, not untracked side effects.
+- [ ] Test overlapping flags with synthetic data and reconcile all totals.
+
+### Slice 2: reliable RAIS person-years
+
+- [ ] Normalize legal-employer and employer-place keys.
+- [ ] Remove and count exact duplicates.
+- [ ] Flag candidate-link conflicts without using wage equality as identity.
+- [ ] Determine December 31 employment before wage, hours or geocode filters.
+- [ ] Standardize contractual salary using `tipo_salario`.
+- [ ] Aggregate genuine simultaneous active links and create outcome-availability flags.
+- [ ] Enforce at most one row per CPF-year.
+
+### Slice 3: cohorts and outcomes
+
+- [ ] Create the complete CPF-by-required-year grid from baseline cohorts, not repeated CadÚnico
+      appearances.
+- [ ] Construct rolling `g - 4` risk sets and absorbing first treatment.
+- [ ] Freeze each cohort's employed-worker median at baseline and apply December 2023 IPCA values.
+- [ ] Calculate baseline-home-to-work distances in DuckDB and aggregate by hours.
+- [ ] Derive baseline H3 resolution 7 for spatial clustering.
+
+### Slice 4: verification before estimation
+
+- [ ] Assert schemas, uniqueness, row conservation and join cardinality at every boundary.
+- [ ] Tabulate flags and sample flow by year, cohort and treatment status.
+- [ ] Inspect differential missing wage and workplace geocoding after treatment.
+- [ ] Run the 2015--2019 pilot window first.
+- [ ] Confirm support and pretrends before interpreting ATT estimates.
+- [ ] Keep conditional wage and distance claims separate from full-cohort causal outcomes.
+
+## Diagnosis of the current pipeline
+
+Findings are ordered by consequence. Line references describe the code reviewed on 2026-10-19.
+
+1. Critical: the current panel is not a fixed baseline-cohort panel.
+   - `R/panels.R:118-194` starts from CadÚnico person-year records and left joins RAIS.
+   - People appear only when they reappear in CadÚnico, so valid RAIS zeros for a fixed cohort cannot
+     be represented consistently.
+   - Attack point: create baseline cohorts, cross them with required years, then join RAIS outcomes.
+
+2. Critical: filtered or unclassifiable RAIS records can become false employment zeros.
+   - `R/read_rais.R:33-37` removes missing establishment IDs before employment classification.
+     `R/panels.R:12-14` retains positive end-of-year flags; lines 58-104 remove wage, hours and
+     geocode cases; lines 192-194 then coalesce every missing match to zero.
+   - Attack point: classify coverage and employment first; scope secondary failures by outcome.
+
+3. Critical: multiple-job handling discards valid employment and encodes the wrong wage rule.
+   - `R/panels.R:16-41` treats total hours above 44 and repeated salary values as evidence against
+     the person. Its comment reports removing almost all multiple-job cases.
+   - Lines 69-114 select the longest-tenure workplace and omit the `52 / 12` conversion,
+     salary-type standardization and deflation.
+   - Attack point: remove exact duplicates, aggregate distinct links and keep outcome-specific flags.
+
+4. High: the accountability log is broken and lacks a coherent counting unit.
+   - `R/panels.R:205` references undefined `bad_data_5`.
+   - Lines 203-205 mislabel objects: `bad_data_3` is workplace-geocode failure and `bad_data_4`
+     is residential-geocode failure.
+   - Lengths mix people and repeated person-years; only some counts are marginal.
+   - Attack point: stable rule IDs, explicit grain and gross plus marginal counts.
+
+5. High: quality failures are applied globally to the person.
+   - `R/panels.R:38-39, 95-104, 122-185` accumulates CPFs across years and sources.
+   - One bad wage or coordinate can erase valid observations and outcomes in every year.
+   - Attack point: global exclusion only for identity failure; otherwise scope flags narrowly.
+
+6. High: establishment geography omits municipality.
+   - `R/read_rais.R:76-90` uses `id_estab + cei_vinc`, without `tipo_estab` or `codemun`.
+   - Attack point: construct and validate legal and place keys before geocoding.
+
+7. High: intended treatment is not implemented.
+   - `R/panels.R:137-145` computes earliest-opening object `pr1` but never uses it. The joined
+     table instead describes the nearest station available by 2023.
+   - Attack point: dedicated rolling-cohort and absorbing-treatment targets.
+
+8. Medium: audit output is an untracked side effect.
+   - `R/panels.R:214-220` writes panel and log but returns only the panel path.
+   - Attack point: explicit targets for flags and sample flow.
+
+9. Medium: joins use implicit common columns.
+   - `R/panels.R:30, 192` and `R/read_rais.R:35, 90` omit explicit keys.
+   - Attack point: specify `by`, audit unmatched rows and assert cardinality.
+
+10. Medium: large objects are collected into R memory.
+    - `R/panels.R:70-86` collects multiple-job records and several CPF vectors are pulled.
+    - Attack point: keep deduplication, flags, distance and aggregation lazy in Arrow or DuckDB.
+
+### Verification status
+
+- Code, DAG, working-tree diff and stored target progress were inspected.
+- Stored progress ends on 2026-10-08; the panel rewrite was committed on 2026-10-15. The stored
+  successful `panel_eoy` run therefore does not validate current code.
+- A read-only `tar_outdated()` and metadata query was attempted, but startup exceeded the timeout.
+  No target was rebuilt and no restricted row-level data was opened.
+- No R code was modified.

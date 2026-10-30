@@ -51,58 +51,6 @@ gtfs_trip_time_bounds <- function(gtfs) {
 }
 
 
-subset_gtfs_relations <- function(gtfs, trip_ids, service_ids) {
-	gtfs$trips <- gtfs$trips |>
-		dplyr::filter(trip_id %in% .env$trip_ids)
-	gtfs$stop_times <- gtfs$stop_times |>
-		dplyr::filter(trip_id %in% .env$trip_ids)
-
-	route_ids <- unique(gtfs$trips$route_id)
-	shape_ids <- unique(stats::na.omit(gtfs$trips$shape_id))
-	stop_ids <- unique(gtfs$stop_times$stop_id)
-
-	gtfs$routes <- gtfs$routes |>
-		dplyr::filter(route_id %in% .env$route_ids)
-	if (!is.null(gtfs$agency) && "agency_id" %in% names(gtfs$routes)) {
-		agency_ids <- unique(gtfs$routes$agency_id)
-		gtfs$agency <- gtfs$agency |>
-			dplyr::filter(agency_id %in% .env$agency_ids)
-	}
-	if (!is.null(gtfs$fare_rules) && "route_id" %in% names(gtfs$fare_rules)) {
-		gtfs$fare_rules <- gtfs$fare_rules |>
-			dplyr::filter(is.na(route_id) | route_id %in% .env$route_ids)
-	}
-	gtfs$stops <- gtfs$stops |>
-		dplyr::filter(stop_id %in% .env$stop_ids)
-
-	if (!is.null(gtfs$shapes)) {
-		gtfs$shapes <- gtfs$shapes |>
-			dplyr::filter(shape_id %in% .env$shape_ids)
-	}
-	if (!is.null(gtfs$frequencies)) {
-		gtfs$frequencies <- gtfs$frequencies |>
-			dplyr::filter(trip_id %in% .env$trip_ids)
-	}
-	if (!is.null(gtfs$calendar)) {
-		gtfs$calendar <- gtfs$calendar |>
-			dplyr::filter(service_id %in% .env$service_ids)
-	}
-	if (!is.null(gtfs$calendar_dates)) {
-		gtfs$calendar_dates <- gtfs$calendar_dates |>
-			dplyr::filter(service_id %in% .env$service_ids)
-	}
-	if (!is.null(gtfs$transfers)) {
-		gtfs$transfers <- gtfs$transfers |>
-			dplyr::filter(
-				from_stop_id %in% .env$stop_ids,
-				to_stop_id %in% .env$stop_ids
-			)
-	}
-
-	gtfs
-}
-
-
 trim_gtfs_to_analysis_window <- function(
 	gtfs,
 	service_date,
@@ -110,7 +58,8 @@ trim_gtfs_to_analysis_window <- function(
 	window_end = "08:30:00"
 ) {
 	service_date <- as.Date(service_date)
-	active_services <- gtfs_active_service_ids(gtfs, service_date)
+	active_services <- gtfstools::get_active_services(gtfs, service_date) |>
+		dplyr::pull(service_id)
 	if (length(active_services) == 0L) {
 		stop("No active GTFS service found on ", service_date, ".")
 	}
@@ -178,11 +127,9 @@ trim_gtfs_to_analysis_window <- function(
 		stop("No trips overlap the analysis window on ", service_date, ".")
 	}
 
-	service_ids <- active_trips |>
-		dplyr::filter(trip_id %in% .env$trip_ids) |>
-		dplyr::pull(service_id) |>
-		unique()
-	gtfs <- subset_gtfs_relations(gtfs, trip_ids, service_ids)
+	gtfs <- gtfstools::filter_by_trip_id(gtfs, trip_ids) |>
+		gtfstools::remove_unused_ids()
+	service_ids <- unique(gtfs$trips$service_id)
 
 	# The analytical feed represents one specific routing date. Calendar
 	# exceptions have already been resolved above, so keeping them would only
@@ -538,27 +485,11 @@ write_bus_feed <- function(
 ) {
 	stopifnot(file.exists(input))
 	dir.create(dirname(output), recursive = TRUE, showWarnings = FALSE)
-	if (!remove_rail && !regularize_bus_times) {
-		copied <- file.copy(input, output, overwrite = overwrite)
-		if (!copied) {
-			stop("Could not copy bus feed to ", output, ".")
-		}
-		return(normalizePath(output))
-	}
-
 	gtfs <- gtfstools::read_gtfs(input)
+	input_counts <- purrr::map_int(gtfs, nrow)
 	if (remove_rail) {
-		rail_route_ids <- gtfs$routes |>
-			dplyr::filter(route_type %in% c(1L, 2L)) |>
-			dplyr::pull(route_id)
-		bus_trips <- gtfs$trips |>
-			dplyr::filter(!route_id %in% .env$rail_route_ids)
-		service_ids <- unique(bus_trips$service_id)
-		gtfs <- subset_gtfs_relations(
-			gtfs,
-			trip_ids = bus_trips$trip_id,
-			service_ids = service_ids
-		)
+		gtfs <- gtfstools::filter_by_route_type(gtfs, c(1L, 2L), keep = FALSE) |>
+			gtfstools::remove_unused_ids()
 	}
 	if (regularize_bus_times) {
 		if (is.null(speed_surface)) {
@@ -571,7 +502,24 @@ write_bus_feed <- function(
 		)
 		gtfs <- regularize_bus_stop_times(gtfs, speed_surface, busways)
 	}
+	output_counts <- purrr::map_int(gtfs, nrow)
+	manifest <- list(
+		input = normalizePath(input),
+		output = normalizePath(output, mustWork = FALSE),
+		service_date = as.character(as.Date(service_date)),
+		remove_rail = remove_rail,
+		regularize_bus_times = regularize_bus_times,
+		input_rows = as.list(input_counts),
+		output_rows = as.list(output_counts),
+		integrity = gtfs_integrity_counts(gtfs)
+	)
 	gtfstools::write_gtfs(gtfs, output, overwrite = overwrite)
+	jsonlite::write_json(
+		manifest,
+		sub("\\.zip$", "_manifest.json", output),
+		pretty = TRUE,
+		auto_unbox = TRUE
+	)
 	normalizePath(output)
 }
 
