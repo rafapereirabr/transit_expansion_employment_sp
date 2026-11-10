@@ -1,6 +1,6 @@
 source("renv/activate.R")
 # rJavaEnv begin: Manage JAVA_HOME
-Sys.setenv(JAVA_HOME = '/Users/baarthur/Library/Caches/org.R-project.R/R/rJavaEnv/installed/macos/aarch64/21') # rJavaEnv
+Sys.setenv(JAVA_HOME = 'C:/Users/B13943152600/AppData/Local/R/cache/R/rJavaEnv/installed/windows/x64/21') # rJavaEnv
 old_path <- Sys.getenv('PATH') # rJavaEnv
 new_path <- file.path(Sys.getenv('JAVA_HOME'), 'bin') # rJavaEnv
 Sys.setenv(PATH = paste(new_path, old_path, sep = .Platform$path.sep)) # rJavaEnv

@@ -1,49 +1,61 @@
 # targets setup ------------------------------------------------------------------------------
 
 options(
-  arrow.pull_as_vector = FALSE,
-  arrow.unsafe_metadata = TRUE,
-  future.globals.maxSize = 1e4^1024
+	arrow.pull_as_vector = FALSE,
+	arrow.unsafe_metadata = TRUE,
+	future.globals.maxSize = 1e4^1024
 )
 
-suppressPackageStartupMessages(
-  {
-    library(targets)
-    library(crew)
-    library(dplyr)
-    library(geoarrow)
-  }
-)
-
+library(targets)
+library(crew)
+# suppressPackageStartupMessages(
+# 	{
+# 		library(arrow)
+# 		library(dplyr)
+# 		library(geoarrow)
+# 	}
+# )
 
 # Set target options:
 tar_option_set(
-  packages = c(
-    "arrow",
-    "dplyr",
-    "docstring",
-    "duckspatial",
-    "sf",
-    "geoarrow",
+	packages = c(
+		"archive",
+		"arrow",
+		"dplyr",
+		"docstring",
+		"duckspatial",
+		"dplyr",
+		"geoarrow",
 		"ggplot2",
 		"h3o",
-    "lwgeom"
-  ),
-  format = "parquet",
-  deployment = "main",
-  controller = crew_controller_local(
-    workers = floor(.6 * parallelly::freeCores()[1])
-  ),
-  trust_timestamps = TRUE,
-  workspace_on_error = TRUE
+		"lwgeom",
+		"sf"
+	),
+	format = "parquet",
+	deployment = "main",
+	controller = crew_controller_local(
+		workers = floor(.6 * parallelly::freeCores()[1])
+	),
+	trust_timestamps = TRUE,
+	workspace_on_error = TRUE
 )
 
 tar_source(files = list.files("R", pattern = "\\.R$", full.names = TRUE))
 
 if (!dir.exists("data")) {
-  dir.create("data")
+	dir.create("data")
 }
 
+restricted_dir <- Sys.getenv("restricted_data_temp")
+if (!nzchar(restricted_dir)) {
+	stop("Set the restricted_dir environment variable before loading the pipeline.")
+}
+restricted_dir <- normalizePath(restricted_dir, winslash = "/", mustWork = TRUE)
+restricted_dir_2 <- Sys.getenv("restricted_data")
+if (!nzchar(restricted_dir_2)) {
+	stop("Set the restricted_dir_2 environment variable before loading the pipeline.")
+}
+restricted_dir_2 <- normalizePath(restricted_dir_2, winslash = "/", mustWork = TRUE)
 
 # targets list -------------------------------------------------------------------------------
 
@@ -79,51 +91,75 @@ list(
 	),
 	tar_target(
 		name = time_window,
-		command = c(2012:2025),
+		command = c(2011:2023),
 		format = "rds"
 	),
-	tar_target(
-		name = routing_spec,
-		command = tibble::tibble(
-			year = c(2012L, 2025L),
-			datetime = as.POSIXct(
-				c("2012-04-10 06:50:00", "2025-04-08 06:50:00"),
-				tz = "America/Sao_Paulo"
-			)
-		) |>
-			dplyr::group_by(year) |>
-			targets::tar_group(),
-		iteration = "group"
-	),
-	tar_target(
-		name = r5_resources,
-		command = list(
-			ram = as.integer(Sys.getenv("R5R_RAM_GB", "8")),
-			cpu = as.integer(Sys.getenv("R5R_CPU", "4"))
-		),
-		format = "rds"
-	),
+	# tar_target(
+	# 	name = routing_spec,
+	# 	command = tibble::tibble(
+	# 		year = c(2012L, 2015L, 2019L, 2023L, 2025L),
+	# 		datetime = paste0(year, "-10-", c("03", "07", "02", "01"), " 06:50:00") |>
+	# 			as.POSIXct(tz = "America/Sao_Paulo")
+	# 	) |>
+	# 		dplyr::group_by(year) |>
+	# 		targets::tar_group(),
+	# 	iteration = "group"
+	# ),
+	# tar_target(
+	# 	name = r5_resources,
+	# 	command = list(
+	# 		ram = as.integer(Sys.getenv("r5r_ram", "8")),
+	# 		cpu = as.integer(Sys.getenv("r5r_cpu", "4"))
+	# 	),
+	# 	format = "rds"
+	# ),
+	# tar_target(
+	# 	name = bus_speed_spec,
+	# 	command = set_bus_speed_spec(),
+	# 	format = "rds"
+	# ),
 
-	## shapefiles -------------------------------------------------------------------------------
+	## shapefiles ------------------------------------------------------------------------------
 	tar_target(
-		name = stations_sf,
-		command = tidy_transit_stations(
+		name = station_inputs,
+		command = c(
 			subway = "data-raw/subway_stations.gpkg",
 			planned_subway = "data-raw/planned_subway_stations.gpkg",
 			train = "data-raw/train_stations.gpkg",
 			planned_train = "data-raw/planned_train_stations.gpkg",
-			save_path = "data/transit_stations.parquet",
-			overwrite = T
+			openings = "data/station_openings.xlsx"
 		),
 		format = "file"
 	),
 	tar_target(
-		name = rail_service_spec,
-		command = set_rail_service_spec(stations_sf)
+		name = stations_base,
+		command = make_station_base(
+			subway = station_inputs[[1L]],
+			planned_subway = station_inputs[[2L]],
+			train = station_inputs[[3L]],
+			planned_train = station_inputs[[4L]]
+		),
+		format = "rds"
 	),
 	tar_target(
-		name = rail_stop_corrections,
-		command = set_rail_stop_corrections()
+		name = stations_raw,
+		command = write_station_raw(
+			stations = stations_base,
+			save_path = "data-raw/stations_raw.xlsx",
+			overwrite = TRUE
+		),
+		format = "file"
+	),
+	tar_target(
+		name = stations_sf,
+		command = tidy_transit_stations(
+			stations = stations_base,
+			openings = station_inputs[[5L]],
+			opening_sheet = "data",
+			save_path = "data/transit_stations.parquet",
+			overwrite = TRUE
+		),
+		format = "file"
 	),
 	tar_target(
 		name = lines_sf,
@@ -139,13 +175,19 @@ list(
 		format = "file"
 	),
 	tar_target(
+		name = spo_sf,
+		command = get_munis(save_path = "data/muni_spo.parquet", overwrite = T, rmsp = FALSE),
+		format = "file"
+	),
+	tar_target(
 		name = munis_sf,
-		command = get_munis(save_path = "data/munis_sf.parquet", overwrite = T),
+		command = get_munis(save_path = "data/munis_rmsp.parquet", overwrite = T),
 		format = "file"
 	),
 	tar_target(
 		name = grid_sf,
-		command = sf_from_parquet(munis_sf) |> h3_from_sf(),
+		command = aopdata::read_landuse("spo", geometry = TRUE) |>
+			dplyr::select(id = id_hex, P001, T001, E001, S001),
 		format = "rds"
 	),
 	tar_target(
@@ -157,12 +199,13 @@ list(
 		format = "file"
 	),
 
+
 	## plots -----------------------------------------------------------------------------------
 	tar_target(
 		name = transit_map,
 		command = plot_lines(
 			footprint_sf = footprint_sf,
-			munis_sf = munis_sf,
+			munis_sf = spo_sf,
 			lines_sf = lines_sf,
 			stations_sf = stations_sf,
 			metro_palette = metro_palette,
@@ -181,203 +224,373 @@ list(
 		format = "file"
 	),
 
-	## transit feeds ---------------------------------------------------------------------------
-	tar_target(
-		name = raw_feed_paths,
-		command = c(
-			"data-raw/gtfs_sptrans_2012.zip",
-			"data-raw/gtfs_emtu_2014.zip",
-			"data-raw/gtfs_sptrans_2025.zip",
-			"data-raw/gtfs_emtu_2025.zip"
-		),
-		format = "file"
-	),
-	tar_target(
-		name = feed_spec,
-		command = tibble::tibble(
-			input = raw_feed_paths,
-			output_name = basename(input),
-			year = c(2012L, 2012L, 2025L, 2025L),
-			service_start = as.Date(c(rep("2012-01-01", 2), rep("2025-01-01", 2))),
-			service_end = as.Date(c(rep("2012-12-31", 2), rep("2025-12-31", 2))),
-			analysis_date = as.Date(c("2012-04-10", "2012-04-10", "2025-04-08", "2025-04-08")),
-			source_audit_date = as.Date(c("2012-04-10", "2014-07-08", "2025-04-08", "2025-04-08")),
-			deduplicate_stops = c(FALSE, TRUE, FALSE, FALSE),
-			drop_shape_distances = TRUE,
-			remove_rail = c(TRUE, FALSE, TRUE, FALSE),
-			regularize_bus_times = c(TRUE, FALSE, TRUE, FALSE),
-			# Change only these flags after inspecting the audit/reports.
-			include_r5 = c(TRUE, FALSE, TRUE, FALSE)
-		)
-	),
-	tar_target(
-		name = source_feed_audit,
-		command = audit_source_feeds(
-			feed_paths = raw_feed_paths,
-			feed_spec = feed_spec,
-			time_window = 15L
-		)
-	),
-	tar_target(
-		name = source_feed_reports,
-		command = validate_feeds(
-			feed_paths = raw_feed_paths,
-			validator_dir = "data/gtfs_validator/source"
-		),
-		format = "file"
-	),
-	tar_target(
-		name = bus_speed_surface,
-		command = "sidequests/check_busways_output/conditional_speed_surface_h3_8.csv",
-		format = "file"
-	),
-	tar_target(
-		name = raw_busway_paths,
-		command = c("data-raw/busways.gpkg", "data-raw/mobilidados_2025.zip"),
-		format = "file"
-	),
-	tar_target(
-		name = prepared_feeds,
-		command = prepare_feeds(feed_spec, output_dir = "data/gtfs/processed"),
-		format = "file"
-	),
-	tar_target(
-		name = bus_feeds,
-		command = write_bus_feeds(
-			feed_paths = prepared_feeds,
-			spec = feed_spec,
-			speed_surface_path = bus_speed_surface,
-			geosampa_busways = raw_busway_paths[1],
-			mobilidados_busways = raw_busway_paths[2],
-			output_dir = "data/gtfs/bus"
-		),
-		format = "file"
-	),
-	tar_target(
-		name = rail_feeds,
-		command = write_scenario_rail_feed(
-			prepared_feeds = prepared_feeds,
-			feed_spec = feed_spec,
-			routing_spec = routing_spec,
-			service_spec = rail_service_spec,
-			stop_corrections = rail_stop_corrections
-		),
-		pattern = map(routing_spec),
-		format = "file"
-	),
-	tar_target(
-		name = scenario_feed_audit,
-		command = audit_scenario_feeds(
-			bus_feeds = bus_feeds,
-			rail_feed = rail_feeds,
-			feed_spec = feed_spec,
-			routing_spec = routing_spec,
-			time_window = 15L
-		),
-		pattern = map(routing_spec, rail_feeds)
-	),
-	tar_target(
-		name = scenario_feed_reports,
-		command = validate_scenario_feeds(
-			bus_feeds = bus_feeds,
-			rail_feed = rail_feeds,
-			feed_spec = feed_spec,
-			routing_spec = routing_spec,
-			validator_dir = "data/gtfs_validator/scenario"
-		),
-		pattern = map(routing_spec, rail_feeds),
-		format = "file"
-	),
-	tar_target(
-		name = r5_feeds,
-		command = export_feeds(
-			spec = feed_spec,
-			prepared_feeds = bus_feeds,
-			year = routing_spec$year,
-			additional_feeds = rail_feeds,
-			r5_dir = "data/r5"
-		),
-		pattern = map(routing_spec, rail_feeds),
-		format = "file",
-		deployment = "main"
-	),
+	# ## transit feeds -------------------------------------------------------------------------
+	# tar_target(
+	# 	name = rail_service_spec,
+	# 	command = set_rail_service_spec(stations_sf)
+	# ),
+	# tar_target(
+	# 	name = rail_stop_corrections,
+	# 	command = set_rail_stop_corrections()
+	# ),
+	# tar_target(
+	# 	name = rail_template_overrides,
+	# 	command = set_rail_template_overrides()
+	# ),
+	# tar_target(
+	# 	name = raw_feed_paths,
+	# 	command = paste0("data-raw/gtfs_sptrans_", routing_spec$year, ".zip"),
+	# 	pattern = map(routing_spec),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = feed_spec,
+	# 	command = set_feed_spec(raw_feed_paths, routing_spec)
+	# ),
+	# tar_target(
+	# 	name = source_feed_audit,
+	# 	command = audit_source_feeds(
+	# 		feed_paths = raw_feed_paths,
+	# 		feed_spec = feed_spec,
+	# 		time_window = 15L
+	# 	)
+	# ),
+	# tar_target(
+	# 	name = source_feed_reports,
+	# 	command = validate_feeds(
+	# 		feed_paths = raw_feed_paths,
+	# 		validator_dir = "data/gtfs_validator/source"
+	# 	),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = raw_busway_paths,
+	# 	command = c("data-raw/busways.gpkg", "data-raw/mobilidados_2025.zip"),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = gtfs_history_archive,
+	# 	command = "data-raw/3550308_sao_paulo.rar",
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = reference_feed_paths,
+	# 	command = extract_reference_feeds(
+	# 		archive_path = gtfs_history_archive,
+	# 		output_dir = "data/gtfs/history",
+	# 		spec = bus_speed_spec
+	# 	),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = reference_feed_inventory,
+	# 	command = build_reference_feed_inventory(
+	# 		paths = reference_feed_paths,
+	# 		spec = bus_speed_spec,
+	# 		source_archive = gtfs_history_archive
+	# 	)
+	# ),
+	# tar_target(
+	# 	name = bus_speed_model,
+	# 	command = estimate_reference_bus_speed_model(
+	# 		inventory = reference_feed_inventory,
+	# 		geosampa_path = raw_busway_paths[1],
+	# 		mobilidados_path = raw_busway_paths[2],
+	# 		spec = bus_speed_spec
+	# 	),
+	# 	format = "rds"
+	# ),
+	# tar_target(
+	# 	name = bus_speed_surface,
+	# 	command = bus_speed_model$surface
+	# ),
+	# tar_target(
+	# 	name = bus_speed_diagnostic_figures,
+	# 	command = plot_bus_speed_diagnostics(
+	# 		speed_summary = bus_speed_model$speed_summary,
+	# 		surface = bus_speed_surface,
+	# 		busways = bus_speed_model$busways,
+	# 		spec = bus_speed_spec,
+	# 		output_dir = "figures/diagnostics"
+	# 	),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = prepared_feeds,
+	# 	command = prepare_feeds(feed_spec, output_dir = "data/gtfs/processed"),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = bus_feeds,
+	# 	command = write_bus_feeds(
+	# 		feed_paths = prepared_feeds,
+	# 		spec = feed_spec,
+	# 		speed_surface = bus_speed_surface,
+	# 		geosampa_busways = raw_busway_paths[1],
+	# 		mobilidados_busways = raw_busway_paths[2],
+	# 		output_dir = "data/gtfs/bus"
+	# 	),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = rail_feeds,
+	# 	command = write_scenario_rail_feed(
+	# 		prepared_feeds = prepared_feeds,
+	# 		feed_spec = feed_spec,
+	# 		routing_spec = routing_spec,
+	# 		service_spec = rail_service_spec,
+	# 		stop_corrections = rail_stop_corrections,
+	# 		template_overrides = rail_template_overrides
+	# 	),
+	# 	pattern = map(routing_spec),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = scenario_feed_audit,
+	# 	command = audit_scenario_feeds(
+	# 		bus_feeds = bus_feeds,
+	# 		rail_feed = rail_feeds,
+	# 		feed_spec = feed_spec,
+	# 		routing_spec = routing_spec,
+	# 		time_window = 15L
+	# 	),
+	# 	pattern = map(routing_spec, rail_feeds)
+	# ),
+	# tar_target(
+	# 	name = scenario_feed_reports,
+	# 	command = validate_scenario_feeds(
+	# 		bus_feeds = bus_feeds,
+	# 		rail_feed = rail_feeds,
+	# 		feed_spec = feed_spec,
+	# 		routing_spec = routing_spec,
+	# 		validator_dir = "data/gtfs_validator/scenario"
+	# 	),
+	# 	pattern = map(routing_spec, rail_feeds),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = r5_feeds,
+	# 	command = export_feeds(
+	# 		spec = feed_spec,
+	# 		prepared_feeds = c(bus_feeds, rail_feeds),
+	# 		# additional_feeds = ,
+	# 		r5_dir = "data/r5",
+	# 		year = routing_spec$year
+	# 	),
+	# 	pattern = map(routing_spec),
+	# 	format = "file",
+	# 	deployment = "main"
+	# ),
 
-	## cadunico families ----------------------------------------------------------------------
+	## population data -------------------------------------------------------------------------
 	tar_target(
-		name = cadunico_fam,
+		name = family_records,
 		command = read_cad_families(
 			years = time_window,
 			munis = munis_sf,
-			save_dir = "data/temp"
+			save_dir = restricted_dir
 		),
 		format = "file"
 	),
-
-	## routing ---------------------------------------------------------------------------------
 	tar_target(
-		name = od_station_proximity,
-		command = set_od_station_proximity(
-			origins = cadunico_fam,
-			destinations = stations_sf,
-			origin_filter = grid_sf
+		name = cad_ind_cols,
+		command = select_available_cols(
+			col_string = c(
+				"co_familiar_fam", "cpf_recuperado", "dt_nasc_pessoa", "co_sexo_pessoa", "co_raca_cor_pessoa", "co_deficiencia_memb", "co_sabe_ler_escrever_memb",
+				"co_principal_trab_memb", "co_trabalho_12_meses_memb", "in_dormir_rua_memb", "in_dormir_albergue_memb", "in_dormir_dom_part_memb", "in_dormir_outro_memb"
+			),
+			years = time_window
 		),
 		format = "rds"
 	),
 	tar_target(
-		name = od_grid_all,
-		command = set_od_grid_all(grid = grid_sf),
-		format = "rds"
-	),
-	tar_target(
-		name = r5_network,
-		command = build_r5r_network(
-			dir = unique(dirname(r5_feeds)),
-			feed_paths = r5_feeds,
-			ram = r5_resources$ram,
-			cpu = r5_resources$cpu
-		),
-		pattern = map(r5_feeds),
-		format = "file",
-		deployment = "main"
-	),
-	tar_target(
-		name = ttm_walk_stations,
-		command = calc_ttm(
-			r5_network = r5_network[basename(dirname(r5_network)) == "2025"],
-			od_table = od_station_proximity,
-			mode = "WALK",
-			max_duration = 180L,
-			threads = r5_resources$cpu,
-			ram = r5_resources$ram,
-			java_cpu = r5_resources$cpu
-		)
-	),
-	tar_target(
-		name = ttm_transit_all,
-		command = calc_ttm(
-			r5_network = r5_network,
-			od_table = od_grid_all,
-			mode = "TRANSIT",
-			departure_datetime = routing_spec$datetime,
-			max_duration = 60L,
-			threads = r5_resources$cpu,
-			ram = r5_resources$ram,
-			java_cpu = r5_resources$cpu
-		),
-		pattern = map(r5_network, routing_spec),
-		deployment = "main"
-	),
-
-	## individuals: cadunico + rais ------------------------------------------------------------
-	tar_target(
-		name = cadunico_ind,
+		name = person_files,
 		command = read_cad_individuals(
 			year = time_window,
-			families = cadunico_fam,
-			save_dir = "data/temp"
+			families = family_records,
+			cols_individ = cad_ind_cols,
+			save_dir = restricted_dir
 		),
 		pattern = map(time_window),
 		format = "file",
 		deployment = "worker"
+	),
+	tar_target(
+		name = person_records,
+		command = person_files[[1]],
+		pattern = map(person_files),
+		format = "file"
+	),
+	tar_target(
+		name = person_audit,
+		command = person_files[[2]],
+		pattern = map(person_files),
+		format = "file"
+	),
+
+	## treatment design ------------------------------------------------------------------------
+
+	## outcomes --------------------------------------------------------------------------------
+	# tar_target(
+	# 	name = rais_records,
+	# 	command = read_rais(time_window, cpf_roster, restricted_dir),
+	# 	pattern = map(time_window),
+	# 	format = "file",
+	# 	deployment = "worker"
+	# ),
+
+
+	## estimation ------------------------------------------------------------------------------
+	tar_target(
+		name = did_spec,
+		command = make_did_spec() |>
+			dplyr::group_by(spec_id) |>
+			tar_group(),
+		iteration = 'group',
+		format = 'rds'
 	)
+	# Future wiring, activated after risk_sets exists and did enters renv:
+	# tar_target(
+	# 	name = did_fit,
+	# 	command = run_att_gt(
+	# 		data = risk_sets,
+	# 		spec = did_spec,
+	# 		cores = as.integer(Sys.getenv('did_cores', '1'))
+	# 	),
+	# 	pattern = cross(risk_sets, did_spec),
+	# 	iteration = 'list'
+	# ),
+	# tar_target(
+	# 	name = att_focal,
+	# 	command = extract_focal_att(did_fit),
+	# 	pattern = map(did_fit),
+	# 	iteration = 'list'
+	# ),
+	# tar_target(
+	# 	name = att_combined,
+	# 	command = combine_att(att_focal),
+	# 	format = 'rds'
+	# ),
+
+
+	## routing ---------------------------------------------------------------------------------
+	# tar_target(
+	# 	name = od_households_stations,
+	# 	command = set_od_households(
+	# 		origins = family_records,
+	# 		destinations = stations_sf,
+	# 		origin_filter = grid_sf
+	# 	),
+	# 	format = "rds"
+	# ),
+	# tar_target(
+	# 	name = od_grid_all,
+	# 	command = set_od_grid_all(grid = grid_sf),
+	# 	format = "rds"
+	# ),
+	# tar_target(
+	# 	name = r5_network,
+	# 	command = build_r5r_network(
+	# 		dir = file.path("data/r5", routing_spec$year),
+	# 		feed_paths = r5_feeds,
+	# 		ram = as.integer(Sys.getenv("r5r_ram", "8")),
+	# 		cpu = as.integer(Sys.getenv("r5r_cpu", "2"))
+	# 	),
+	# 	pattern = map(routing_spec, r5_feeds),
+	# 	format = "file",
+	# 	deployment = "main"
+	# ),
+	# tar_target(
+	# 	name = r5_network_bypass,
+	# 	command = file.path("data/r5", routing_spec$year, "network.dat"),
+	# 	pattern = map(routing_spec),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = ttm_walk_stations,
+	# 	command = calc_ttm(
+	# 		r5_network = r5_network,
+	# 		od_table = od_households_stations,
+	# 		mode = "WALK",
+	# 		max_duration = 60L,
+	# 		threads = r5_resources$cpu,
+	# 		ram = r5_resources$ram,
+	# 		java_cpu = r5_resources$cpu
+	# 	),
+	# 	pattern = slice(r5_network, 1),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = ttm_transit,
+	# 	command = calc_ttm(
+	# 		od_table = od_grid_all,
+	# 		r5_network = r5_network,
+	# 		mode = "TRANSIT",
+	# 		departure_datetime = routing_spec$datetime,
+	# 		max_duration = 90L,
+	# 		threads = as.integer(Sys.getenv("r5r_cpu", "2")),
+	# 		ram = as.integer(Sys.getenv("r5r_ram", "8")),
+	# 		java_cpu = as.integer(Sys.getenv("r5r_cpu", "2"))
+	# 	),
+	# 	pattern = map(r5_network, routing_spec),
+	# 	deployment = "main",
+	# 	format = "file"
+	# ),
+
+	## accessibility ---------------------------------------------------------------------------
+	# tar_target(
+	# 	name = ttm_bypass,
+	# 	command = make_bypass(
+	# 		c(
+	# 			`2012` = "data/temp/ttm_transit_e2950d2e8433a431",
+	# 			`2015` = "data/temp/ttm_transit_c26a0951e37e50d1",
+	# 			`2019` = "data/temp/ttm_transit_f851f939384786e9",
+	# 			`2025` = "data/temp/ttm_transit_5057e1791761c2ea"
+	# 		),
+	# 		routing_spec$year
+	# 	),
+	# 	pattern = map(routing_spec),
+	# 	format = "file"
+	# ),
+	# tar_target(
+	# 	name = balanced_units,
+	# 	command = arrow::open_dataset(ttm_bypass) |>
+	# 		distinct(from_id, year) |>
+	# 		collect() |>
+	# 		count(from_id) |>
+	# 		filter(n == max(n)) |>
+	# 		pull(from_id),
+	# 	format = "rds"
+	# ),
+	# tar_target(
+	# 	name = access_spec,
+	# 	command = tibble::tribble(
+	# 		~method             , ~crit_val                 ,
+	# 		"cumulative_cutoff" , list(cutoff = 60)         ,
+	# 		"gravity"           , list(cutoff = 60, sd = 5)
+	# 	) |>
+	# 		dplyr::group_by(method) |>
+	# 		tar_group(),
+	# 	iteration = "group",
+	# 	format = "rds"
+	# ),
+	# tar_target(
+	# 	name = access,
+	# 	command = calc_access(
+	# 		ttm = ttm_bypass, #ttm_transit,
+	# 		grid = grid_sf,
+	# 		crit_val = access_spec$crit_val[[1]],
+	# 		group = "dep_datetime",
+	# 		method = access_spec$method,
+	# 		balance_origins = FALSE
+	# 	),
+	# 	pattern = cross(access_spec, ttm_bypass),
+	# 	deployment = "worker"
+	# ),
+	# tar_target(
+	# 	name = access_plots,
+	# 	command = plot_access(access, grid_sf, method = access_spec$method),
+	# 	pattern = map(access_spec),
+	# 	format = "rds"
+	# ),
 )

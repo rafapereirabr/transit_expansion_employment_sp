@@ -6,7 +6,8 @@ set_r5r_java_options <- function(ram = 48, cpu = 12) {
 		paste0("-XX:ActiveProcessorCount=", cpu)
 	)
 
-	jvm_initialized <- "rJava" %in% loadedNamespaces() &&
+	jvm_initialized <- "rJava" %in%
+		loadedNamespaces() &&
 		isTRUE(get(".jniInitialized", envir = asNamespace("rJava")))
 	if (jvm_initialized && !all(parameters %in% getOption("java.parameters"))) {
 		stop(
@@ -41,7 +42,11 @@ save_r5r_log <- function(dir, label, required = FALSE) {
 	source <- file.path(dir, "r5r-log.log")
 	if (!file.exists(source)) {
 		message <- paste0("R5 log not found: ", source)
-		if (required) stop(message) else warning(message, call. = FALSE)
+		if (required) {
+			stop(message)
+		} else {
+			warning(message, call. = FALSE)
+		}
 		return(invisible(NA_character_))
 	}
 	label <- gsub("[^[:alnum:]_-]", "_", tolower(label))
@@ -49,7 +54,11 @@ save_r5r_log <- function(dir, label, required = FALSE) {
 	copied <- file.copy(source, destination, overwrite = TRUE)
 	if (!copied) {
 		message <- paste0("Could not preserve R5 log at ", destination, ".")
-		if (required) stop(message) else warning(message, call. = FALSE)
+		if (required) {
+			stop(message)
+		} else {
+			warning(message, call. = FALSE)
+		}
 		return(invisible(NA_character_))
 	}
 	normalizePath(destination)
@@ -85,25 +94,32 @@ build_r5r_network <- function(
 
 # o-d table ----------------------------------------------------------------------------------
 
-set_od_station_proximity <- function(origins, destinations, origin_filter = NULL) {
+# library(sf)
+# source("R/utils.R")
+# tar_load(c(family_records, stations_sf, grid_sf))
+# origins = family_records
+# destinations = stations_sf
+# origin_filter = grid_sf
+
+set_od_households <- function(origins, destinations, origin_filter = NULL) {
 	## origins: cadunico families @ h3 centroid
 	origins <- arrow::open_dataset(origins)
 
 	if (!is.null(origin_filter)) {
 		allowed_hex <- sf::st_drop_geometry(origin_filter) |>
-			pull(h3_address)
+			pull(id)
 		origins <- filter(origins, h3_09 %in% allowed_hex)
 	}
 
 	origins <- origins |>
-		rename(id = h3_09) |>
-		h3_from_sf(col_name = "id") |>
-		mutate(origin = TRUE, .after = id) |>
-		st_centroid()
+		distinct(lat, lon, id_addr_cad) |>
+		st_as_sf(coords = c("lon", "lat"), crs = 4674) |>
+		st_transform(crs = 4326) |>
+		mutate(id = id_addr_cad, origin = TRUE, .keep = "unused")
 
 	destinations <- sf_from_parquet(destinations)
 	destinations <- destinations |>
-		transmute(id = as.character(code_station), origin = FALSE, geometry) |>
+		transmute(id = code_station, origin = FALSE, geometry) |>
 		st_transform(crs = 4326)
 
 	od <- bind_rows(origins, destinations) |>
@@ -114,7 +130,7 @@ set_od_station_proximity <- function(origins, destinations, origin_filter = NULL
 
 set_od_grid_all <- function(grid) {
 	grid <- grid |>
-		rename(id = h3_address) |>
+		filter(if_any(where(is.numeric), ~ .x > 0)) |>
 		st_centroid()
 
 	od <- bind_rows(
@@ -139,8 +155,19 @@ calc_ttm <- function(
 	threads = 10,
 	ram = 48,
 	java_cpu = 12,
-	keep_log = TRUE
+	keep_log = TRUE,
+	as_target_file = TRUE
 ) {
+	resource_record <- paste(
+		format(Sys.time(), tz = 'America/Sao_Paulo', usetz = TRUE),
+		paste0('network_year=', basename(dirname(r5_network))),
+		paste0('threads=', threads),
+		paste0('java_cpu=', java_cpu),
+		paste0('ram_gb=', ram),
+		sep = ' | '
+	)
+	message('R5 TTM resources | ', resource_record)
+
 	set_r5r_java_options(ram = ram, cpu = java_cpu)
 	network <- r5r::build_network(dirname(r5_network), overwrite = F)
 	on.exit(r5r::stop_r5(network), add = TRUE)
@@ -170,15 +197,28 @@ calc_ttm <- function(
 		time_window = time_window,
 		max_trip_duration = max_duration,
 		n_threads = threads,
-		verbose = T
+		progress = T
 	)
 	if (keep_log) {
 		log_label <- paste(tolower(mode), basename(dirname(r5_network)), sep = "_")
-		save_r5r_log(dirname(r5_network), log_label)
+		log_path <- save_r5r_log(dirname(r5_network), log_label)
+		if (!is.na(log_path)) {
+			cat('R5 TTM resources | ', resource_record, '\n', file = log_path, append = TRUE, sep = '')
+		}
 	}
 
 	ttm <- ttm |>
-		mutate(year = !!year, dep_datetime = dep_datetime)
+		mutate(dep_datetime = dep_datetime)
 
-	return(ttm)
+	if (as_target_file) {
+		path <- paste0("data/ttm_", mode, year, ".parquet")
+		arrow::write_parquet(ttm, path)
+		return(path)
+	} else {
+		return(ttm)
+	}
+}
+
+make_bypass <- function(path, year) {
+	path[[as.character(year)]]
 }

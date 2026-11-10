@@ -1,0 +1,15 @@
+format:
+  html:
+    theme:
+      - cosmo
+      - plan.scss
+    toc: true
+    toc-location: left
+    toc-depth: 3
+    embed-resources: true
+    smooth-scroll: true
+    anchor-sections: true
+    code-copy: false
+    code-overflow: wrap
+date-format: iso
+lang: en

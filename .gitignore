@@ -3,6 +3,7 @@
 .Rhistory
 .RData
 .Ruserdata
+.Renviron
 Thumbs.db
 .DS_Store
 .positai
@@ -10,15 +11,21 @@ Thumbs.db
 *.png
 ~$*.xlsx
 
-rjavaenv/*
+/_targets/*
 data/*
 !data/station_openings.xlsx
 data-raw/stations_raw.xlsx
 data-raw/*.zip
 data-raw/*.rar
 data-raw/gtfs_history
+docs/*
+rjavaenv/*
 sidequests/*
 !sidequests/*.R
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Rendered previews of workflow reports (Markdown is canonical)
+quality_reports/**/*.html
+quality_reports/**/*_files/

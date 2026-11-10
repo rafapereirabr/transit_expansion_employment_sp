@@ -1,0 +1,51 @@
+/*-- scss:defaults --*/
+
+$font-family-sans-serif:
+  Inter, Aptos, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
+$font-size-root: 18px;
+$headings-font-weight: 650;
+$headings-color: #173f5f;
+$primary: #25658a;
+
+/*-- scss:rules --*/
+
+body {
+  line-height: 1.65;
+}
+
+main {
+  max-width: 920px;
+}
+
+h2 {
+  border-bottom: 1px solid #d9e2e8;
+  padding-bottom: 0.3rem;
+  margin-top: 2.5rem;
+}
+
+h3 {
+  margin-top: 1.8rem;
+}
+
+#TOC {
+  font-size: 0.86rem;
+  line-height: 1.35;
+}
+
+.task-list-item {
+  margin-bottom: 0.35rem;
+}
+
+.task-list-item input[type='checkbox'] {
+  margin-right: 0.45rem;
+}
+
+@media print {
+  #TOC {
+    display: none;
+  }
+
+  body {
+    font-size: 11pt;
+  }
+}

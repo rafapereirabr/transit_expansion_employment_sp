@@ -1,0 +1,155 @@
+---
+title: "Pacotes trimestrais e risk sets anuais: opções de desenho"
+date: 2026-11-09
+format: html
+---
+
+## Propósito e escopo
+
+Esta nota propõe uma estrutura para comparar antes de alterar `R/define_treatment.R`.
+Ela não altera a implementação, não estima efeitos e não muda o estimando já registrado.
+
+O ponto a resolver é específico: um pacote como `L05_2018_q3` não pode integrar o
+grupo de controle de uma análise cujo tratamento focal seja `L05_2018_q1`. Ao mesmo
+tempo, o outcome principal é anual (situação formal em 31 de dezembro) e `did::att_gt()`
+recebe ano-calendário como `gname`.
+
+## O que os registros atuais permitem afirmar
+
+- O desenho registrado usa residência e elegibilidade em `g - 4`, primeiro tratamento
+  absorvente dentro de 2015--2023 e controles elegíveis ainda não tratados.
+- A coorte de tratamento de `did::att_gt()` é o ano de primeira atribuição, mesmo quando
+  a identidade qualitativa do evento permanece em um `branch` externo.
+- A documentação canônica recomenda preservar a data real de serviço experimental e os
+  dias de operação até 31 de dezembro para interpretação de `ATT(g, g)`.
+
+Não encontrei nos registros consultados uma justificativa documentada para trocar a data
+exata pelo trimestre. Portanto, esta nota trata a escolha trimestral como uma convenção
+de agrupamento possível, e não como uma propriedade empiricamente demonstrada do efeito.
+
+## Opções temporais
+
+| Opção | Pacote operacional | Coorte e risk set | Vantagem | Limitação principal |
+|---|---|---|---|---|
+| A. Trimestre como rótulo, ano como coorte | `L05_2018_q3`, com as datas exatas preservadas | Anuais | Mantém a convenção já iniciada e é compatível com outcome anual | Não identifica separadamente efeitos de dois pacotes no mesmo ano sem exclusões adicionais |
+| B. Data exata como pacote, ano como coorte | linha × `dt_trial_svc` | Anuais | É a versão mais fiel da cronologia e da regra de idade | Pode criar muitos pacotes pequenos; continua sem gerar um painel de outcomes intra-anuais |
+| C. Trimestre como pacote e como risk set | Trimestrais | Trimestrais | Parece alinhar pacote e controle | Não é coerente com o outcome anual atual, mistura diferentes durações de exposição no mesmo `g` e exige reespecificar o estimando |
+
+Recomendação provisória: **Opção A**. Ela acomoda a escolha por trimestre sem afirmar
+que o trimestre seja o momento causal de abertura. A data exata continua armazenada para
+idade, dias de operação, auditoria e análises de heterogeneidade. A Opção B permanece uma
+alternativa fácil de recuperar porque requer apenas mudar a chave do pacote, não o
+contrafactual anual.
+
+## Contrato proposto para as tabelas
+
+### `opening_events`
+
+Uma linha por estação, com uma tabela separada de membros por pacote quando necessário.
+
+| Campo | Regra |
+|---|---|
+| `opening_year` | `year(dt_trial_svc)`; não usar uma coluna redundante sem validar igualdade |
+| `event_quarter` | `quarter(dt_trial_svc)`; rótulo descritivo |
+| `event_id` | na Opção A, linha × ano × trimestre; na Opção B, linha × data de serviço |
+| `dt_trial_svc` | data histórica real, nunca substituída pelo fim do trimestre |
+| `station_id` | chave de membro do pacote |
+| `event_included` e `event_class` | distinguem nova estação/serviço, infill, reabertura e evento excluído |
+
+Devem existir validações de chave, de `opening_year == year(dt_trial_svc)` e de que cada
+estação elegível pertence a exatamente um pacote incluído no ano.
+
+### Exposição anual por endereço
+
+Para cada endereço de baseline e ano `g`, construir uma tabela sem pessoas com:
+
+- `near_pre_g`: serviço disponível antes de `g` dentro de 2 km;
+- `near_new_g`: pelo menos uma estação de evento incluído aberta no ano `g` dentro de 2 km;
+- `near_event_focal`: cobertura por estações do pacote focal;
+- `near_other_event_g`: cobertura por outro pacote incluído no mesmo ano;
+- `spillover_focal`: distância de 2--4 km do pacote focal, somente para a sensibilidade
+  de spillover;
+- indicadores de múltipla cobertura no mesmo ano.
+
+A tabela precisa usar o mesmo critério de distância exata e o mesmo CRS/unidade em todas
+as colunas. Nenhum endereço perto de abertura no ano `g` pode ser classificado como
+controle anual, inclusive se a abertura ocorrer no trimestre posterior ao do pacote focal.
+
+### Risk set pessoa--coorte
+
+Para cada pessoa elegível no snapshot `g - 4`:
+
+1. fixar residência, CPF válido e idade de 22--60 na `dt_trial_svc` aplicável;
+2. combinar a exposição anual do endereço de baseline;
+3. atribuir `G_i` como o menor `g` no qual a pessoa elegível recebeu cobertura nova;
+4. em um risk set anual `g`, excluir somente pessoas com `G_i < g`;
+5. classificar a cobertura anterior a `g` como serviço de base, não como prova de
+   tratamento absorvente fora da janela de estudo;
+6. produzir `first` quando `near_new_g` e não houver serviço de base, e `additional`
+   quando `near_new_g` e houver serviço de base.
+
+Assim, a absorção pertence à atribuição pessoa--coorte (`G_i`), não ao endereço nem à
+idade da estação próxima.
+
+## Como estimar um pacote trimestral com um risk set anual
+
+Para uma estimativa de pacote focal `e = L05_2018_q1`:
+
+- o ano focal é `g = 2018`;
+- o grupo tratado focal contém pessoas com `near_event_focal = TRUE` e `G_i = 2018`;
+- pessoas com `near_other_event_g = TRUE`, mas sem cobertura do pacote focal, são
+  **same-year treated**: não pertencem ao controle desta estimativa de pacote;
+- controles têm `G_i = 0` ou `G_i > 2018`, sujeitos às demais regras de suporte e
+  estrato de serviço de base;
+- pessoas expostas a mais de um pacote no mesmo ano devem ser marcadas. Uma estimativa
+  específica por pacote deve excluí-las ou usar uma regra de alocação pré-especificada;
+  não pode contá-las duas vezes como tratadas independentes.
+
+Para uma estimativa anual agregada, o grupo focal pode ser a união de todos os pacotes
+incluídos de 2018. Nesse caso o trimestre serve para decomposição descritiva e auditoria,
+não para definir controles distintos.
+
+## Cadeia de alegação e linguagem calibrada
+
+| Elo | Estado necessário | Formulação defensável agora |
+|---|---|---|
+| Dados | catálogo de aberturas e endereços de baseline auditados | “O catálogo classifica estações por ano e pacote de abertura.” |
+| Medida | distância exata e regras de cobertura implementadas | “A exposição é atribuída pela proximidade da residência em `g - 4` às aberturas do ano `g`.” |
+| Contraste | risk set anual e outcomes anuais construídos | “A análise compara mudanças anuais entre pessoas atribuídas à coorte `g` e controles ainda não tratados.” |
+| Identificação | tendências paralelas condicionais, ausência de antecipação diferencial e mapeamento de interferência plausível | “Sob essas hipóteses explícitas, o contraste estima o efeito ITT de abertura/operação para a população definida.” |
+
+Até que os três últimos elos sejam verificados, evitar “efeito do trimestre”, “efeito de
+uma estação” ou “impacto causal” como descrição dos dados. O trimestre pode identificar
+um pacote administrativo; não torna o outcome de dezembro uma medida trimestral.
+
+## Stress test (devil's advocate)
+
+| Desafio | Mecanismo de falha | O que ameaça | Evidência/diagnóstico mais informativo | Classe |
+|---|---|---|---|---|
+| Aberturas do mesmo ano no controle | pacote posterior entra como não tratado no pacote anterior | validade do contrafactual | auditoria `G_i` por ano e flag de `same-year treated` | Potencialmente fatal |
+| Antecipação e obras | famílias e firmas reagem a anúncio/construção antes da abertura | interpretação como efeito de operação | leads por corredor e cronologia de obras/anúncios | Design-limiting |
+| Versões do tratamento | duas aberturas de um ano podem ter alcance e qualidade distintos | interpretação de ATT anual agregado | descrever composição do pacote, estações e dias de operação; não chamar de efeito homogêneo | Empiricamente avaliável |
+| Serviço de base versus tratamento prévio | excluir endereços perto de estações antigas confunde rede prévia com `G_i` | população e estrato `additional` | auditoria de pessoas anteriormente atribuídas versus serviço existente no baseline | Potencialmente fatal |
+| Spillovers além de 2 km | controles recebem melhoria de rede mesmo fora do buffer | SUTVA/mapeamento de exposição | mapas de ganho de acessibilidade e sensibilidades 2--4 km/ganho alto | Design-limiting |
+| Seleção residencial e registro | baseline em `g - 4` pode refletir mudança anterior motivada por planejamento | interpretação ITT para residentes | históricos de endereço, balanceamento e testes de pré-tendência | Empiricamente avaliável |
+| Outcome anual e duração desigual | uma abertura em dezembro tem pouco tempo para afetar 31 de dezembro | comparabilidade de `ATT(g,g)` | dias de operação e resultados que se iniciam no primeiro ano completo | Principalmente interpretativo |
+
+O primeiro ponto a resolver é a classificação anual de todos os eventos do mesmo ano. Sem
+ela, qualquer diagnóstico posterior usa um grupo de controle contaminado. Depois, a prioridade é
+materializar `G_i` no nível pessoa antes de discutir o estimador.
+
+## Decisões a confirmar antes de programar
+
+1. O trimestre continuará como chave de pacote (`event_id`) ou será apenas uma coluna de rótulo?
+2. Em estimativas por pacote, pessoas cobertas por dois pacotes no mesmo ano serão excluídas ou
+   atribuídas por uma regra fixa e substantiva?
+3. O resultado principal reportará o ano de abertura separadamente do primeiro ano-calendário
+   completo de operação, como a documentação atual recomenda?
+4. O limite etário primário será 22--60 na data real de serviço experimental, mantendo 18--21
+   somente como estimando secundário?
+
+## Verificação da nota
+
+- Fontes de desenho: `MEMORY.md`, `BACKLOG.md`, `R/define_treatment.R` e os helpers de estimação.
+- Não foram lidos nem produzidos dados administrativos restritos.
+- Não foram executados `targets`; esta é uma proposta de desenho, não validação empírica.

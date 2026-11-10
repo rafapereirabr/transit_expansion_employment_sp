@@ -1,0 +1,79 @@
+---
+title: "Adopt selected gtfstools development helpers"
+date: 2026-10-21
+status: COMPLETED
+format:
+  html:
+    self-contained: true
+---
+
+## Objective
+
+Adopt the selected `gtfstools` development APIs in the Sao Paulo feed pipeline while preserving
+the project-specific bus-runtime model and rail reconstruction. Correct the recycled 2025 routing
+date and update the trip-speed audit to the new API.
+
+## Known context and assumptions
+
+- The installed package is `gtfstools` 1.4.0.9000 at commit `5d178541`, while `renv.lock` remains
+  at CRAN 1.4.0 by user request.
+- The canonical 2025 routing date is 2025-10-01.
+- `get_route_frequency()` matched the existing departure counts in smoke tests.
+- `filter_by_route_type()` followed by `remove_unused_ids()` preserved the existing core bus-feed
+  route, trip, stop, and service identifiers in the 2025 feed.
+- Package helpers do not replace the segment-specific bus speed surface or the explicit rail-feed
+  reconstruction.
+
+## Files and targets affected
+
+- `_targets.R`: explicit routing dates and a calendar-overlap gate target.
+- `R/gtfs.R`: active-service, frequency-audit, trip-speed, and overlap helpers.
+- `R/analysis_feeds.R`: relational filtering with package helpers.
+- `R/bus_speeds.R`: package active-service lookup.
+- `MEMORY.md`: durable date correction and package-adoption boundary.
+- Targets: `feed_spec`, `source_feed_audit`, `prepared_feeds`, `bus_feeds`, `rail_feeds`,
+  `scenario_calendar_overlap`, and `scenario_feed_audit`.
+
+## Ordered steps
+
+1. Make all five routing datetimes explicit and set 2025 to 2025-10-01.
+2. Replace custom active-service lookups with `get_active_services()`.
+3. Use `get_route_frequency()` for route/departure/headway audit metrics while retaining the
+   existing trip-pattern selection needed by speed and runtime diagnostics.
+4. Replace custom relational subsetting with `filter_by_trip_id()` or
+   `filter_by_route_type()` followed by `remove_unused_ids()`.
+5. Add `get_calendar_overlap()` as an explicit scenario gate and DAG dependency.
+6. Change `get_trip_speed(file = "shapes")` to `method = "shapes"`.
+7. Format R files, run focused equivalence/smoke checks, inspect target invalidation, and build the
+   narrowest affected feed/audit scope that is practical.
+
+## Verification
+
+- Confirm all scenario dates, especially 2025-10-01.
+- Compare active services and route-frequency counts with expected feed invariants.
+- Confirm bus-feed route/trip/stop/service identifiers and absence of rail route types.
+- Confirm the overlap gate passes for every bus-plus-rail scenario on its analysis date.
+- Run `air format .`, inspect `targets::tar_outdated()`, and run focused `tar_make()` targets.
+- Do not run R5 travel-time matrices.
+
+## Decisions requiring approval
+
+None. The user approved changes 1, 3, and 4 and explicitly deferred the `renv` snapshot.
+
+## Verification results
+
+- Parsed `_targets.R`, the edited GTFS helpers, and the files reformatted by Air successfully.
+- Smoke-tested `audit_feed()` on the raw 2025 feed at `2025-10-01`; active-service,
+  route-frequency, departure, and speed diagnostics completed without deprecated-API warnings.
+- Checked the midnight boundary (`23:50` plus 15 minutes becomes `24:05`).
+- Checked relational integrity after filtering the bus feed and after trimming it to the analysis
+  window: retained route, trip, stop, and service identifiers remained consistent.
+- Exercised the calendar-overlap gate across existing artifacts. It passes the dates represented by
+  those artifacts and intentionally rejects the corrected 2025 scenario because its existing rail
+  feed was built for the former `2025-10-03` date and therefore must be rebuilt.
+- Focused `targets::tar_make()` verification could not reach the GTFS branch because pipeline
+  evaluation failed first in unrelated existing code (`pull()` resolution and `set_controls()`
+  being called before its definition in `R/naive_plots.R`). A full target rebuild remains pending.
+- Ran the repository Air formatter. It reformatted several existing R files, which the user accepted;
+  the run then stopped at a pre-existing syntax error in `sidequests/rasc raisss.R`.
+- Did not run `renv::snapshot()`, per the user's instruction.
