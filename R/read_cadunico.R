@@ -80,6 +80,63 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 
 # read_cad_individs ---------------------------------------------------------------------------
 
+## some cols are not available throughout all the period; this guarantees we'll only keep those that are available.
+select_available_cols <- function(col_string, years) {
+	nm <- purrr::map(
+		years,
+		~ ipeadatalake::ler_cadunico(.x * 100 + 12, "pessoa", harmonizado = T, verboso = F) |> names()
+	)
+
+	cols <- purrr::map2(
+		years,
+		nm,
+		function(x, y) {
+			tibble(year = x, name = col_string, present = col_string %in% y)
+		}
+	) |>
+		bind_rows()
+
+	not_always <- cols |>
+		filter(!present)
+	# not_always |>
+	#   tidyr::pivot_wider(names_from = name, values_from = present)
+
+	cols_remove <- not_always |> distinct(name) |> pull()
+	new_string <- setdiff(col_string, cols_remove)
+	return(new_string)
+}
+
+check_cpf <- function(cpf) {
+	if (length(cpf) == 0L) {
+		return(logical())
+	}
+
+	formatted <- !is.na(cpf) & grepl('^[0-9]{11}$', cpf)
+	safe_cpf <- ifelse(formatted, cpf, '00000000000')
+	digits <- do.call(rbind, strsplit(safe_cpf, '', fixed = TRUE))
+	digits <- matrix(as.integer(digits), ncol = 11L)
+	check_1 <- (rowSums(sweep(digits[, 1:9, drop = FALSE], 2L, 10:2, FUN = '*')) * 10) %% 11
+	check_1[check_1 == 10L] <- 0L
+	check_2 <- (rowSums(sweep(digits[, 1:10, drop = FALSE], 2L, 11:2, FUN = '*')) * 10) %% 11
+	check_2[check_2 == 10L] <- 0L
+	repeated <- apply(digits, 1L, function(x) length(unique(x)) == 1L)
+
+	formatted & !repeated & digits[, 10L] == check_1 & digits[, 11L] == check_2
+}
+
+flag_person_records <- function(data, duplicate_cpf, min_age = 18) {
+	data <- as.data.frame(data)
+	data$drop_reason <- dplyr::case_when(
+		is.na(data$cpf) ~ 'missing_cpf',
+		data$cpf %in% duplicate_cpf ~ 'duplicate_cpf',
+		!check_cpf(data$cpf) ~ 'invalid_cpf',
+		is.na(data$age) ~ 'missing_birthdate',
+		data$age < min_age ~ 'under_18',
+		.default = 'retained'
+	)
+	data
+}
+
 # tar_load(c(time_window, family_records))
 # # tar_load(c(pilot_years, pilot_families))
 # save_dir <- "data/temp"
@@ -88,7 +145,7 @@ read_cad_families <- function(years, munis, save_dir = NULL) {
 # # families <- pilot_families
 # # year <- pilot_years[1]
 
-read_cad_individuals <- function(year, families, save_dir = NULL) {
+read_cad_individuals <- function(year, families, cols_individ, save_dir = NULL) {
 	if (inherits(families, "character")) {
 		families <- arrow::open_dataset(families)
 	} else if (!inherits(families, "ArrowTabular")) {
@@ -99,29 +156,15 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		filter(year == !!year) |>
 		compute()
 
-	individ <- ipeadatalake::ler_cadunico(100 * year + 12, "pessoa")
-
-	cols_ind <- c(
-		"co_familiar_fam",
-		"cpf",
-		"cpf_imputado",
-		"cpf_recuperado",
-		"dt_nasc_pessoa",
-		"co_sexo_pessoa",
-		"co_raca_cor_pessoa",
-		"co_deficiencia_memb",
-		"co_sabe_ler_escrever_memb",
-		"co_principal_trab_memb",
-		"co_trabalho_12_meses_memb",
-		"in_dormir_rua_memb",
-		"in_dormir_albergue_memb",
-		"in_dormir_dom_part_memb",
-		"in_dormir_outro_memb"
+	individ <- ipeadatalake::ler_cadunico(
+		100 * year + 12,
+		"pessoa",
+		harmonizado = TRUE
 	)
 
 	individ <- individ |>
-		select(any_of(cols_ind)) |>
-		rename(any_of(c(cpf = "cpf_imputado", cpf = "cpf_recuperado")))
+		select(all_of(cols_individ)) |>
+		rename(cpf = cpf_recuperado)
 
 	## remove duplicates --- zero policy for now (very few cases, not worth the trouble)
 	duplicate_fam <- families |>
@@ -130,12 +173,12 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		pull(co_familiar_fam)
 	stopifnot(length(duplicate_fam) == 0)
 	duplicate_ind <- individ |>
+		filter(!is.na(cpf)) |>
 		count(cpf) |>
 		filter(n > 1) |>
 		pull(cpf)
 	matched_ind <- individ |>
-		filter(!(cpf %in% duplicate_ind | is.na(cpf))) |>
-		inner_join(families)
+		inner_join(families, by = 'co_familiar_fam')
 
 	## remove minors
 	end_of_year <- paste(year, 12, 31, sep = "-") |>
@@ -144,33 +187,73 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 		mutate(
 			age = (as.integer(end_of_year) - as.integer(dt_nasc_pessoa)) / 365.25,
 		) |>
-		filter(age >= 18) |>
+		arrow::map_batches(flag_person_records, duplicate_cpf = duplicate_ind) |>
+		compute()
+	audit_reasons <- c(
+		'missing_cpf',
+		'duplicate_cpf',
+		'invalid_cpf',
+		'missing_birthdate',
+		'under_18',
+		'retained'
+	)
+	cpf_audit <- matched_ind |>
+		filter(!is.na(cpf)) |>
+		distinct(drop_reason, cpf) |>
+		count(drop_reason, name = 'n_cpf') |>
+		collect()
+	person_audit <- matched_ind |>
+		count(drop_reason, name = 'n_records') |>
+		collect() |>
+		left_join(cpf_audit, by = 'drop_reason') |>
+		tidyr::complete(
+			drop_reason = audit_reasons,
+			fill = list(n_records = 0L, n_cpf = 0L)
+		) |>
+		mutate(
+			year = !!year,
+			excluded = drop_reason != 'retained',
+			step = match(drop_reason, audit_reasons),
+			.before = everything()
+		) |>
+		arrange(step) |>
+		rename(reason = drop_reason)
+	message(
+		'CadUnico ',
+		year,
+		': retained ',
+		person_audit$n_records[person_audit$reason == 'retained'],
+		'; excluded ',
+		sum(person_audit$n_records[person_audit$excluded]),
+		'.'
+	)
+	matched_ind <- matched_ind |>
+		filter(drop_reason == 'retained') |>
+		select(-drop_reason) |>
 		compute()
 
 	# tidy data
 	matched_ind <- matched_ind |>
 		rename(
 			id_family = co_familiar_fam,
-			last_updated_cad = dt_atualizacao_fam,
 			code_muni_cad = cd_ibge_cadastro,
 			birthdate_cad = dt_nasc_pessoa,
 			gender_cad = co_sexo_pessoa,
 			race_cad = co_raca_cor_pessoa,
 			disability_cad = co_deficiencia_memb,
 			literate_cad = co_sabe_ler_escrever_memb,
-			main_job_status_cad = co_principal_trab_memb,
 			h3_09_cad = h3_09,
 			lat_cad = lat,
-			lon_cad = lon,
-			employed_12mo_cad = co_trabalho_12_meses_memb
+			lon_cad = lon #,
+			# employed_12mo_cad = co_trabalho_12_meses_memb
 		) |>
 		mutate(
 			year = !!year,
-			unhoused = in_dormir_rua_memb +
-				in_dormir_albergue_memb +
-				in_dormir_dom_part_memb +
-				in_dormir_outro_memb,
-			years_update = (as.integer(end_of_year) - as.integer(last_updated_cad)) / 365.25,
+			# unhoused = in_dormir_rua_memb +
+			# 	in_dormir_albergue_memb +
+			# 	in_dormir_dom_part_memb +
+			# 	in_dormir_outro_memb,
+			# years_update = (as.integer(end_of_year) - as.integer(last_updated_cad)) / 365.25,
 			.keep = "unused"
 		) |>
 		relocate(year, cpf, .before = everything()) |>
@@ -199,8 +282,14 @@ read_cad_individuals <- function(year, families, save_dir = NULL) {
 	write_parquet_target(
 		matched_ind,
 		file_path,
-		overwrite = T
+		overwrite = TRUE
+	)
+	audit_path <- file.path(save_dir, paste0('cad_individ_audit_', year, '.parquet'))
+	write_parquet_target(
+		person_audit,
+		audit_path,
+		overwrite = TRUE
 	)
 
-	return(file_path)
+	return(c(records = file_path, audit = audit_path))
 }

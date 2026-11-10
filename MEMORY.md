@@ -62,8 +62,11 @@ not by itself evidence of inclusion; those study objectives require separate def
 
 The initial primary outcome is an indicator of a qualifying formal job active on December 31 as
 observed in RAIS. Missing or invalid CPFs are excluded and audited when the CadÚnico roster is
-constructed, before baseline cohorts are defined. For a valid cohort CPF in a fully processed RAIS
-year, no exact CPF match means `formal = 0`; `formal = NA` is reserved for source, extraction or
+constructed, before baseline cohorts are defined. `cpf_recuperado` from the harmonized person table
+is canonical because it already incorporates the original CPF. Check-digit validation excludes
+invalid values and records the annual count; there is no fallback to `cpf` or `cpf_imputado`. For a
+valid cohort CPF in a fully processed RAIS year, no exact CPF match means `formal = 0`; `formal = NA`
+is reserved for source, extraction or
 coverage failures, or records whose December 31 status cannot be classified. Missing wage, hours,
 establishment or workplace geocoding must not turn an observed formal-employment record into zero.
 The CadÚnico employment indicator is not a primary outcome because it has extensive missingness and
@@ -91,7 +94,10 @@ outcome among people formally employed on December 31. Measure distance from the
 residential latitude and longitude to each active workplace, then average concurrent links using
 weekly contracted hours as weights. Compute the ellipsoidal distance outside R memory with DuckDB
 Spatial. Exact geodesic distance, not H3 membership, defines the 2 km treatment buffer; H3 remains
-available for territorial aggregation and candidate spatial clustering. The outcome is `NA` for
+available for territorial aggregation and candidate spatial clustering. Projected
+`ST_DWithin()` may reduce candidate pairs only when a conservative margin is followed by the
+exact geodesic cutoff. Nearest-station risk-set calls omit origins outside that exact cutoff rather
+than returning them with a missing distance. The outcome is `NA` for
 non-employed person-years or when required geocodes
 cannot be resolved. It is conditional on formal employment and workplace geocoding, and a positive
 estimate is not interpreted as a worse commute: greater distance can reflect an expanded labor
@@ -149,6 +155,24 @@ construction and anchored expectations may already affect those residents. It in
 narrower comparison for the incremental effect of opening and operation, conditional on corridor
 selection and implementation. Line 19 is not part of this central robustness pool unless its
 distinct planning status and exposure history are evaluated separately.
+
+The labor pipeline uses one compact `did_spec` table rather than one target for every model. Each
+opening risk set and baseline-service stratum (`first` or `additional`) is estimated separately with
+`did::att_gt()`, whose treatment-group field remains the calendar year of first assigned treatment;
+qualitative event identity stays in the surrounding risk-set data and target branch. Only the focal
+cohort's `ATT(g,t)` is extracted from each fit. First- and additional-service estimates are combined
+using their treated-person counts, and this result is named `combined` to avoid confusion with both
+pooled OLS and `aggte()`'s `overall` aggregation. Joint uncertainty for this combined estimate is
+still pending a person-level bootstrap and must not be inferred from the two separate standard
+errors.
+
+CadÚnico population preparation retains the annual histories of every family observed in the RMSP
+at least once during the analysis window. After building `family_records` on 2026-11-05, an audit of
+`year × co_familiar_fam` returned no duplicates, so no within-year record-selection rule is needed.
+The harmonized person-table schema varies across years: CPF, birth date and family key are core
+requirements, while historical socioeconomic and housing fields must be selected only when present.
+Person extraction writes separate annual record and aggregate audit files; row-level identifiers
+must never enter the audit artifact.
 
 Initial accessibility implementation holds the 2019 `aopdata` land-use surface fixed across network
 scenarios. The preferred main causal specification will instead fix opportunities at each window's
@@ -302,6 +326,17 @@ service assumptions instead of conflating all changes in a single comparison.
   conventions. These are validated against the `stations_sf` target,
   whose upstream opening-date input is `data/station_openings.xlsx`. Feed-specific
   `route_id` values are inferred and checked rather than treated as line identity.
+- [LEARN:station-registry] Treating `running` as an immutable join key would reject intentional
+  manual curation -> `data-raw/stations_raw.xlsx` preserves the GeoSampa-derived status,
+  `data/station_openings.xlsx` may correct it, and the final registry joins on line and station
+  identity before taking `running` from the curated catalog.
+- The analytical station registry does not use `yr_original`, `reform`, or `yr_reform`.
+  Reform-only events and the 2014 Line 8 Amador Bueno/Santa Rita reconstruction/reopening are
+  excluded from the pooled labor design. Line 13 service at Engenheiro Goulart is additional
+  service because Line 12 already served that station before the Line 13 opening.
+- The curated opening catalog was reviewed on 2026-11-04. The 2017--2018 Line 5 packages now have
+  trial and full-service dates from the Metrô 2018 integrated report. The first six Line 6 stations
+  began assisted service on 2026-07-03 and remain outside the 2015--2023 treatment window.
   The primary pragmatic scenario applies common service assumptions in every
   year: 35 km/h commercial speed for metro/monorail, 40 km/h for metropolitan
   rail, and HPM headways from a prior project table. Metrô headways came from
@@ -360,6 +395,16 @@ service assumptions instead of conflating all changes in a single comparison.
 ## Corrections and workflow learnings
 
 Append durable corrections as `[LEARN:category] wrong assumption → corrected practice or fact`.
+
+[LEARN:terminology] Translating routine technical terms such as `target`, `outcome` and `branch`
+into Portuguese made project communication harder to follow → retain established English terms in
+Portuguese discussion and documentation, adding a Portuguese gloss only when clarification is
+useful. Keep field terms such as `rapid transit` and `labor market` unhyphenated, including in
+attributive use.
+
+[LEARN:editorial] Leaving a diagnostic expression after `return()` obscured dead code in a function
+→ finish every function by assigning its final sequence to a named object and explicitly returning
+that object. Do not leave executable expressions after `return()`.
 
 [LEARN:workspace] A previously injected Codex workspace pointed to the storage-backed checkout even
 though Positron and R were opened in the local checkout → when locations disagree, use the checkout

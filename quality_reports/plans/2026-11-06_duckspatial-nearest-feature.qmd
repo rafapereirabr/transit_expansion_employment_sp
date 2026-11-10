@@ -1,0 +1,51 @@
+---
+title: DuckDB Spatial nearest-feature helper
+date: 2026-11-06
+format: html
+---
+
+## Objective
+
+Adapt `R/dist_nearest.R` so that pairwise distance calculation and nearest-feature selection run
+inside DuckDB through `duckspatial`, while preserving the row order and geometry of `x`.
+
+## Design
+
+1. Accept either two `sf` inputs or two table names registered in `conn`. Return an `sf` object
+   for `sf` input and a lazy DuckDB relation for table-name input.
+2. Use `duckspatial::ddbs_distance()` to create the pairwise distances in DuckDB. Rank candidates
+   by distance and `id_y` within each `id_x`, so ties are deterministic, and materialize only the
+   selected row per feature in `x`.
+3. Allow the caller to choose DuckDB's distance implementation through `dist_type`. In particular,
+   use `dist_type = "spheroid"` for the project's ellipsoidal WGS84 distances.
+4. Let `id_y` identify a column in `y` whose values are returned in `id_closest`; otherwise,
+   retain the one-based row index. Use a separate internal row id for stable joins and tie-breaking.
+5. Let `drop_geometry` remove the geometry from the final result. This can reduce output width and
+   materialization cost, but it does not reduce the pairwise distance work.
+6. Create and close an internal DuckDB connection for `sf` inputs when `conn` is absent; require
+   a caller-owned connection for table-name inputs. Remove intermediate tables before returning.
+7. Add an optional `max_distance` filter. Generate candidates with projected `ST_DWithin()`,
+   calculate the requested exact distance only for those candidates, and omit origins without a
+   destination inside the exact cutoff. Keep projected candidate generation conceptually separate
+   from the exact treatment distance.
+
+## Performance boundary
+
+DuckDB Spatial does not currently expose an exact equivalent of `sf::st_nearest_feature()`. The
+exact top-1 query evaluates the Cartesian set of candidate pairs, with `O(n_x * n_y)` distance
+work. DuckDB R-tree indexes accelerate supported spatial predicate filters, not
+`ORDER BY ST_Distance(...)`. This implementation is appropriate when `y` is small (such as the
+station inventory). A future large-by-large use case needs an explicit candidate-generation
+strategy and correctness checks that guarantee the true nearest feature is retained.
+
+## Verification
+
+- Compare projected-coordinate distances and nearest ids with `sf::st_nearest_feature()` plus
+  pairwise `sf::st_distance()` on synthetic points.
+- Test geographic points with `dist_type = "spheroid"` and verify the result against the full
+  `duckspatial::ddbs_distance()` matrix.
+- Test custom distance names, unit retention/removal, a non-default geometry-column name, empty
+  `x`, empty `y`, deterministic ties, caller-owned connections, table-name inputs, custom
+  `id_y` values, geometry dropping, threshold filtering, and origins outside the cutoff.
+- Run `air format .` and rerun the focused synthetic checks after formatting.
+

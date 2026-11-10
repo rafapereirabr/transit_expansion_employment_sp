@@ -1,12 +1,10 @@
-# tidy_transit_stations -----------------------------------------------------------------------
+# make_station_base ---------------------------------------------------------------------------
 
-tidy_transit_stations <- function(
+make_station_base <- function(
 	subway,
 	planned_subway,
 	train,
-	planned_train,
-	save_path,
-	overwrite = FALSE
+	planned_train
 ) {
 	col_select <- c("nm_linha_metro_trem", "cd_identificador", "nm_estacao_metro_trem", "ge_ponto")
 
@@ -50,7 +48,9 @@ tidy_transit_stations <- function(
 		select(all_of(col_select)) |>
 		rename(all_of(col_rename)) |>
 		filter(!(name_station %in% c("VILA SÔNIA", "VILA PRUDENTE"))) |>
-		mutate(running = ifelse(between(code_station, 99, 106), 1, 0))
+		# Stable codes remove planned duplicates even when source names have encoding differences.
+		filter(!(code_station %in% c(95, 136))) |>
+		mutate(running = as.integer(code_station %in% 99:106))
 
 	## train stations ---------------------------------------------------------------------------
 	train_stations <- sf::read_sf(train)
@@ -81,22 +81,90 @@ tidy_transit_stations <- function(
 	) |>
 		left_join(lines_dic, by = "name_line") |>
 		sf::st_as_sf()
+	sf::st_geometry(stations_sf) <- "geometry"
 
-	## opening dates ----------------------------------------------------------------------------
-	###' there's no easy way around it, this was a careful process of checking opening dates for
-	###' each station since there's no consolidated database on it. hence, we write an intermediate
-	###' manually insert dates, and upload it back to the target.
+	return(stations_sf)
+}
 
-	writexl::write_xlsx(sf::st_drop_geometry(stations_sf), "data-raw/stations_raw.xlsx")
-	dates <- readxl::read_xlsx("data/station_openings.xlsx", sheet = "data")
-	stations_sf <- left_join(
-		stations_sf,
-		dates,
-		by = c("name_line", "code_station", "name_station", "running")
-	) |>
-		mutate(
-			across(c(infill, rebuilt, reform), ~ tidyr::replace_na(.x, 0))
+
+# write_station_raw ---------------------------------------------------------------------------
+
+write_station_raw <- function(stations, save_path, overwrite = FALSE) {
+	stopifnot(inherits(stations, "sf"))
+
+	if (!file.exists(save_path) || overwrite) {
+		writexl::write_xlsx(sf::st_drop_geometry(stations), save_path)
+	}
+
+	return(save_path)
+}
+
+
+# tidy_transit_stations -----------------------------------------------------------------------
+
+tidy_transit_stations <- function(
+	stations,
+	openings,
+	opening_sheet = "data",
+	save_path,
+	overwrite = FALSE
+) {
+	stopifnot(inherits(stations, "sf"))
+	stopifnot(length(openings) == 1L)
+	stopifnot(grepl("[.]xlsx$", openings, ignore.case = TRUE))
+
+	dates <- readxl::read_xlsx(openings, sheet = opening_sheet)
+	keys <- c("name_line", "code_station", "name_station")
+
+	station_keys <- stations |>
+		sf::st_drop_geometry() |>
+		select(all_of(keys))
+	date_keys <- dates |>
+		select(all_of(keys))
+
+	station_dupes <- station_keys |>
+		group_by(across(all_of(keys))) |>
+		summarise(n = n(), .groups = "drop") |>
+		filter(n > 1L)
+	date_dupes <- date_keys |>
+		group_by(across(all_of(keys))) |>
+		summarise(n = n(), .groups = "drop") |>
+		filter(n > 1L)
+
+	if (nrow(station_dupes) > 0L) {
+		stop("Station base has duplicated opening-catalog keys.", call. = FALSE)
+	}
+	if (nrow(date_dupes) > 0L) {
+		stop("Station opening catalog has duplicated keys.", call. = FALSE)
+	}
+
+	missing_dates <- anti_join(station_keys, date_keys, by = keys)
+	missing_stations <- anti_join(date_keys, station_keys, by = keys)
+
+	if (nrow(missing_dates) > 0L) {
+		stop(
+			sprintf("Station opening catalog is missing %d station keys.", nrow(missing_dates)),
+			call. = FALSE
 		)
+	}
+	if (nrow(missing_stations) > 0L) {
+		stop(
+			sprintf(
+				"Station opening catalog has %d keys absent from the station base.",
+				nrow(missing_stations)
+			),
+			call. = FALSE
+		)
+	}
+
+	stations_sf <- left_join(
+		select(stations, -running),
+		dates,
+		by = keys,
+		relationship = "one-to-one"
+	) |>
+		mutate(across(c(infill, rebuilt), ~ tidyr::replace_na(.x, 0))) |>
+		select(-any_of(c("reform", "yr_original", "yr_reform")))
 
 	###' eras: even though we're in 2026 and so line 17 is open and line 6 will open next week,
 	###' our max data ref is 2025 (if we use it!), so these stations will be treated as u/c. still,
@@ -124,11 +192,8 @@ tidy_transit_stations <- function(
 			name_system, # basic info
 			running,
 			infill,
-			rebuilt,
-			reform, # dummies
+			rebuilt, # dummies
 			yr_open,
-			yr_original,
-			yr_reform,
 			dt_trial_svc,
 			dt_full_svc, # dates
 			src_trial_svc,

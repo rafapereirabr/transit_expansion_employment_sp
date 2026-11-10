@@ -12,6 +12,25 @@ This file contains unfinished work only. Durable findings and decisions belong i
 
 ## Medium term — CAF report (Dec 2026–Jan 2027)
 
+### Current implementation sequence — checkpoint 2026-11-05
+
+- [ ] Finish and inspect all annual `person_records` and `person_audit` branches after the resolved
+  schema-compatibility adjustment. Check aggregate exclusion counts, geocode availability and
+  cross-year CPF/birth-date inconsistencies without exporting identifiers.
+- [ ] Build `opening_events` from `stations_sf`, with one row per line × trial-service date, a stable
+  `event_id`, station membership, exact dates, event classification and inclusion flags. Keep the
+  station XLSX-to-target pipeline unchanged while doing this.
+- [ ] Build outcome-free rolling `risk_sets`: baseline residence and eligibility at `g - 4`, age
+  22--60 on the trial-service date, exact geodesic station distance, first/additional service,
+  absorbing study-window treatment assignment, not-yet-treated controls and comparison flags.
+- [ ] Derive `cpf_roster` only from eligible risk-set members; then reactivate nationwide RAIS
+  extraction and construct outcomes. Do not restore the obsolete all-CadÚnico `person_roster` or
+  `panel_eoy` workflow.
+- [ ] Wire the risk sets to `did_spec`, `run_att_gt()` and focal-ATT extraction. Implement joint
+  person-level inference before reporting `combined` first/additional estimates with uncertainty.
+- [ ] Keep routing and accessibility targets dormant during this sequence; preserve them for later
+  reactivation and do not delete or refactor them as part of the labor-risk-set work.
+
 - [ ] Finalize the CadÚnico–RAIS linkage, baseline cohort frame, outcome definitions and disclosure
   protocol. Implement and audit the December 31 rule: exclude missing or invalid CPFs before cohort
   construction; code no exact RAIS match as zero only for a valid CPF-year covered by a completed
@@ -39,10 +58,11 @@ This file contains unfinished work only. Durable findings and decisions belong i
   substantively large modeled accessibility gains, fixing the gain threshold without outcome-based
   selection. Record but defer the ever-treated-only comparison. Confirm with CAF whether to include
   pre-specified fictitious opening dates for the Line 6 and Line 17 corridors as placebo diagnostics.
-- [ ] Audit the opening catalog before cohort construction: distinguish new stations, new line
-  service at existing stations, infill stations, reforms and reopenings; verify trial and full-service
-  dates; and decide whether the 2014 Line 8 Amador Bueno/Santa Rita reopening merits a separate case
-  study outside the pooled 2015--2023 design.
+- [ ] Finish the opening-event audit before cohort construction: distinguish new stations, new line
+  service at existing stations, infill stations and reopenings. Exclude reform-only events and the
+  2014 Line 8 Amador Bueno/Santa Rita reconstruction/reopening from the pooled design; classify
+  Line 13 at Engenheiro Goulart as additional service. Trial/full-service dates and their sources
+  have been completed for all 2015--2023 openings.
 - [ ] Build a 2023 transport/accessibility scenario for the 2023 labor endpoint, or document and
   validate an explicit proxy; do not silently substitute the existing 2025 TTM.
 - [ ] Build the design-support table for each window: baseline people and cells, modeled
@@ -73,6 +93,10 @@ This file contains unfinished work only. Durable findings and decisions belong i
   candidate spatial clustering. Audit
   missing workplace geocodes separately and describe the outcome as a conditional spatial mechanism,
   not as observed commute distance or travel time.
+- [ ] If projected `ST_DWithin()` candidate generation becomes a bottleneck, benchmark a
+  persistent H3 candidate lookup for repeated station-distance cutoffs. Treat H3 only as candidate
+  generation, require 100% recall against exact geodesic cutoffs on the study geography, and avoid
+  adopting a fine resolution such as 11 without checking the expanded `gridDisk()` size.
 - [ ] If time permits, analyze people aged 18--21 on the package's trial-service date as a separate
   school-to-work estimand; keep ages 22--60 on that date as the primary population.
 - [ ] After the initial annual analysis, evaluate secondary formal-employment attachment outcomes:

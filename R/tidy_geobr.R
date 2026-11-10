@@ -1,11 +1,13 @@
 # get_munis -----------------------------------------------------------------------------------
 
-get_munis <- function(save_path = NULL, overwrite = FALSE) {
-	# munis_sf <- geobr::read_metro_area(2024, 35)
-	# munis_sf <- munis_sf |>
-	#   filter(type == "RM de São Paulo (SP)")
-
-	munis_sf <- geobr::read_municipality(2024, 3550308)
+get_munis <- function(save_path = NULL, overwrite = FALSE, rmsp = TRUE) {
+	if (rmsp) {
+		munis_sf <- geobr::read_metro_area(2024, 35)
+		munis_sf <- munis_sf |>
+			filter(type == "RM de São Paulo (SP)")
+	} else {
+		munis_sf <- geobr::read_municipality(2024, 3550308)
+	}
 
 	obj <- write_parquet_target(munis_sf, save_path, overwrite)
 	return(obj)

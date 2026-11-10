@@ -1,0 +1,28 @@
+# Labor DiD matryoshka skeleton
+
+Date: 2026-11-03
+
+## Objective
+
+Create a reviewable CAF labor-estimation skeleton without yet building cohorts, risk sets, outcomes,
+or changing the station-opening pipeline.
+
+## Scope
+
+- Store the active model family in one compact specification table.
+- Estimate every rolling risk set and baseline-service stratum separately.
+- Extract only the focal cohort ATT(g,t) from each estimator call.
+- Keep the opening year separate from the first-full-year summary.
+- Weight first and additional treatment estimates by treated counts for the combined point estimate.
+- Leave combined uncertainty pending a joint person-level bootstrap.
+
+## Non-goals
+
+Do not change station inputs, routing, accessibility, cohort construction, treatment assignment, or
+outcome construction. Do not run estimators against restricted data.
+
+## Verification
+
+Format and parse touched R files, inspect the specification table, and confirm that the active DAG
+does not yet require a risk-set target or the did package.
+

@@ -1,9 +1,9 @@
 #' read_rais
 
 # tar_load(time_window)
-# tar_load(person_roster)
+# tar_load(cpf_roster)
 # year <- time_window[1]
-# individuals <- person_roster
+# individuals <- cpf_roster
 
 read_rais <- function(year, individuals, save_dir = NULL) {
 	if (inherits(individuals, "character")) {

@@ -145,6 +145,10 @@ use a smoke test when available and state clearly when a full run remains pendin
 
 ## Editorial conventions
 
+- In Portuguese project communication, retain established technical terms in English when they are
+  routine in the relevant workflow or field, including `target`, `outcome`, `branch`, `pipeline`
+  and `risk set`. Do not silently translate them as `alvo`, `desfecho`, `ramificação` or similar;
+  when clarification is useful, keep the English term first and add a Portuguese gloss once.
 - In project prose, write the established field terms `rapid transit` and `labor market` without
   hyphens, including when they modify a following noun (for example, `rapid transit expansion` and
   `labor market outcomes`).

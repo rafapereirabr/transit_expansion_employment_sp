@@ -1,0 +1,35 @@
+---
+title: Station opening provenance
+date: 2026-11-04
+format: html
+---
+
+## Objective
+
+Separate the reproducible station registry, the XLSX template used for manual opening-date
+research, and the final station table enriched with the curated opening catalog.
+
+## Scope
+
+- Track the four station GeoPackages and data/station_openings.xlsx as file inputs.
+- Build the spatial station base without opening dates.
+- Preserve the recipe that creates data-raw/stations_raw.xlsx.
+- Keep manual curation outside the DAG: the pipeline must never overwrite
+  data/station_openings.xlsx.
+- Update the curated workbook only through the approved manual edit: complete the 2017--2018
+  Line 5 service dates and sources, correct the first six Line 6 assisted-service records, and
+  repair the Fradique Coutinho and Lapa source fields.
+- Join the curated catalog back to the station base with explicit key and cardinality checks.
+- Exclude the unused historical fields yr_original, reform, and yr_reform from the analytical
+  station registry.
+- Leave lines, routing, and accessibility logic unchanged.
+
+## Verification
+
+- Parse the touched R files.
+- Run Air from the repository root.
+- Build the narrow station-input, station-base, raw-template, and final-station targets.
+- Confirm that both station sides have unique join keys and match completely.
+- Confirm that every 2015--2023 opening has trial and full-service dates, sources accompany dates,
+  and trial service never follows full service.
+- Inspect downstream invalidation without running routing or accessibility targets.
