@@ -1,7 +1,7 @@
 ---
 title: Preliminary DiD downstream while RAIS runs
 date: 2026-11-12
-status: APPROVED
+status: COMPLETED
 ---
 
 User will run targets only through rais_workplaces. Freeze upstream R/read_rais.R,
@@ -24,3 +24,5 @@ policies. Save aggregate audit outputs; avoid restricted values in error logs.
 Verification remains textual: no R, analysis, tests or targets executed by this agent.
 Functional checks must follow before activating DiD targets. Current pipeline execution
 is a user-run verification build, not proof of downstream readiness.
+
+Implementation and textual review complete; functional verification remains pending. See the corresponding session log for the within-cohort inference scope and remaining inputs.

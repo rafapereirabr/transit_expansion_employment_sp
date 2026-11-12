@@ -648,3 +648,15 @@ baseline cells across cohorts; independent per-fit cluster draws are not suffici
 combined or cross-model inference. The existing person bootstrap does not implement this
 spatial contract and must be revised and verified before reporting spatial intervals.
 No R, targets, bootstrap or empirical inference was executed when recording this choice.
+
+## Preliminary DiD implementation — 2026-11-12; not executed
+
+User will run upstream through rais_workplaces as currently implemented; Varginha and
+upstream corridor changes are deferred for that run. The downstream grid now supports
+all five outcomes, unadjusted/baseline-adjusted models and anticipation scenarios.
+Missing-covariate policy remains audit_pending. Per-model suspensions preserve other fits.
+Baseline preparation/audits and H3-7 cluster pairs inference are implemented, unverified.
+Spatial draws are shared across strata/models within each focal cohort, covering combined
+stratum weights. No cross-cohort covariance/bands or cross-cohort average is produced;
+repeated people can have different baseline cells across risk sets and require additional
+joint inference for such contrasts. Do not treat separate trajectories as independent.

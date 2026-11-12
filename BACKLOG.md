@@ -316,3 +316,18 @@ Current incident recovered and console responsiveness confirmed by the user. Evi
   preserving repeated-person dependence across risk sets; audit cluster counts and treated
   concentration. Current person-only bootstrap is not yet compliant with this choice.
 - [ ] Add H3-6 inference as a subsequent sensitivity, without selecting resolution by significance.
+
+## Downstream update during upstream user-run build — 2026-11-12
+
+- [x] Implement preliminary five-outcome, adjusted/unadjusted grid with anticipation 0
+  default and audit_pending covariate policy; per-model suspension and annual trajectories.
+- [x] Implement within-cohort H3-7 cell pairs bootstrap and joint first/additional inference;
+  all execution/functional verification remains pending. No cross-cohort inference provided.
+- [ ] Supply audited h3_7_baseline, membership/exposure and outcomes; run missing-covariate
+  audits and decide coverage policy before fitting. Category-code maps require source checks.
+- [ ] Format/parse/test downstream functions before activating DiD targets; current task
+  did not run R or modify the upstream chain through rais_workplaces.
+- [ ] Preserve repeated-person dependence across different baseline cells before any
+  cross-cohort comparison or global confidence band. No such contrasts in first output.
+- [ ] Keep Varginha/corridor expansion deferred while proceeding with current upstream build,
+  per the latest user instruction. Upstream build success has not been verified by the agent.

@@ -119,3 +119,64 @@ build_did_membership <- function(risk_set, exposure, focal_year, baseline_year) 
 	# overlap indicator, and status 4's nearest station need not be its earliest opening.
 	return(membership)
 }
+
+# Add baseline covariates to an outcome-free membership table, before crossing years.
+# Invalid/nonresponse codes remain NA for the audit; no missing-data policy is selected here.
+prepare_did_baseline <- function(
+	membership,
+	valid_codes = list(gender_cad = c("1", "2"), race_cad = as.character(1:5),
+		literate_cad = c("1", "2"))
+) {
+	data <- collect_did_data(membership)
+	require_did_columns(data, c(
+		"cpf", "risk_set_g", "baseline_year", "birthdate_cad",
+		"gender_cad", "race_cad", "literate_cad"
+	))
+	if (anyDuplicated(data[c("cpf", "risk_set_g")])) stop("Duplicate baseline membership.")
+	birth <- as.Date(data$birthdate_cad)
+	baseline_date <- as.Date(sprintf("%d-12-31", data$baseline_year))
+	data$age_baseline <- as.integer(format(baseline_date, "%Y")) -
+		as.integer(format(birth, "%Y")) -
+		as.integer(format(baseline_date, "%m-%d") < format(birth, "%m-%d"))
+	data$age_baseline[is.na(birth) | birth > baseline_date] <- NA_integer_
+	mapping <- c(
+		gender_cad = "gender_baseline",
+		race_cad = "race_baseline",
+		literate_cad = "literacy_baseline"
+	)
+	for (column in names(mapping)) {
+		if (is.null(valid_codes[[column]])) stop("Supply valid baseline category codes.")
+		value <- as.character(data[[column]])
+		value[!value %in% valid_codes[[column]]] <- NA_character_
+		data[[mapping[[column]]]] <- factor(value, levels = valid_codes[[column]])
+	}
+	return(data)
+}
+
+# This audit can run before outcomes exist. It accepts a membership table or a
+# long panel and counts people once per risk set. Outputs remain restricted.
+audit_did_covariates <- function(data) {
+	data <- collect_did_data(data)
+	variables <- c("age_baseline", "gender_baseline", "race_baseline", "literacy_baseline")
+	key <- if ("person_id" %in% names(data)) "person_id" else "cpf"
+	require_did_columns(data, c(key, "risk_set_g", "base_service", "treat_year", variables))
+	columns <- unique(c(key, "risk_set_g", "base_service", "treat_year", variables))
+	data <- unique(data[columns])
+	if (anyDuplicated(data[c(key, "risk_set_g")])) stop("Baseline covariates vary within membership.")
+	data$exposure_role <- ifelse(data$treat_year == data$risk_set_g, "focal_treated", "comparison_candidate")
+	data$all_covariates_observed <- stats::complete.cases(data[variables])
+	coverage <- dplyr::group_by(data, risk_set_g, base_service, exposure_role) |>
+		dplyr::summarise(
+			n_people = dplyr::n(), n_complete = sum(all_covariates_observed),
+			n_incomplete = sum(!all_covariates_observed), .groups = "drop"
+		)
+	missing <- lapply(variables, function(column) {
+		data$missing <- is.na(data[[column]])
+		dplyr::group_by(data, risk_set_g, base_service, exposure_role) |>
+			dplyr::summarise(
+				n_people = dplyr::n(), n_missing = sum(missing), .groups = "drop"
+			) |>
+			dplyr::mutate(covariate = column)
+	}) |> dplyr::bind_rows()
+	return(list(coverage = coverage, missing = missing))
+}
