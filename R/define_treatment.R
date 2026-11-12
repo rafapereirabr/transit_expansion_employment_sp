@@ -5,9 +5,14 @@
 list_assumptions <- function(
 	time_window,
 	g_lag = 4,
+	age_min = 18,
+	age_max = 60,
+	max_geo_dev = 500,
+	max_cad_outdated = 2,
 	cutoff_sharp = 2000,
 	spillover_sharp = 4000,
-	max_dist_sharp = NULL
+	max_dist_sharp = 15e3,
+	legacy_service_end = 2010L
 ) {
 	if (is.null(g_lag)) {
 		g_lag <- 0
@@ -18,8 +23,14 @@ list_assumptions <- function(
 	treat_list <- list(
 		"time_window" = time_window,
 		"g_lag" = g_lag,
-		"age_min" = 18,
-		"age_max" = 60,
+		"legacy_service_end" = legacy_service_end,
+		"age_min" = age_min,
+		"age_max" = age_max,
+		"max_geo_dev" = max_geo_dev,
+		"max_cad_outdated" = max_cad_outdated,
+		"age_reference" = "january_1",
+		"distance_type" = "planar",
+		"distance_crs" = 31983L,
 		"treat_window" = treat_window,
 		"cutoff_sharp" = cutoff_sharp,
 		"spillover_sharp" = spillover_sharp,
@@ -67,6 +78,7 @@ define_risk_sets <- function(
 	stations,
 	events,
 	individual_data,
+	munis,
 	assumptions,
 	save_dir
 ) {
@@ -74,16 +86,18 @@ define_risk_sets <- function(
 	event_stations <- events$code_station
 	event_year <- unique(events$yr_open)
 	event_year_lag <- event_year - assumptions$g_lag
-	stopifnot(length(event_year) == 1)
-	## forbidden comparisons are [g - g_lag, g), hence weuse time_window instead of treat_window
-	forbidden_years <- assumptions$time_window[
-		between(assumptions$time_window, event_year_lag, event_year - 1)
-	]
-	## not-yet-treated years
-	nyet_years <- setdiff(
-		assumptions$treat_window,
-		c(event_year, forbidden_years)
+	stopifnot(length(event_year) == 1, assumptions$age_reference == "january_1")
+	# Legacy service is fixed at 2010, independently of the rolling residential baseline.
+	stopifnot(
+		length(assumptions$legacy_service_end) == 1L,
+		is.finite(assumptions$legacy_service_end),
+		assumptions$legacy_service_end == as.integer(assumptions$legacy_service_end),
+		event_year > assumptions$legacy_service_end
 	)
+	forbidden_years <- seq.int(assumptions$legacy_service_end, event_year - 1L)
+	forbidden_years <- forbidden_years[forbidden_years > assumptions$legacy_service_end]
+	## not-yet-treated years
+	nyet_years <- assumptions$treat_window[assumptions$treat_window > event_year]
 
 	# separate stations by treatment status:
 	## always treated (pre), opened bef. g (remove), first treatment (new), not yet, and future treat.
@@ -98,11 +112,11 @@ define_risk_sets <- function(
 			geometry
 		)
 	stations_list <- list(
-		"stations_pre" = filter(stations, yr_open < min(forbidden_years)),
+		"stations_pre" = filter(stations, yr_open <= assumptions$legacy_service_end),
 		"stations_remove" = filter(stations, yr_open %in% forbidden_years),
 		"stations_new" = filter(stations, code_station %in% event_stations),
 		"stations_nyet" = filter(stations, yr_open %in% nyet_years),
-		"stations_future" = filter(stations, code_line %in% c(6, 17))
+		"stations_future" = filter(stations, code_line %in% c(2, 6, 17))
 	)
 
 	# load and filter individual data
@@ -110,30 +124,60 @@ define_risk_sets <- function(
 	individual_data <- filter(individual_data, year == event_year_lag) |>
 		compute()
 	n0_ind <- nrow(individual_data)
+	# Family extraction retains histories outside the study area; eligibility is local at baseline.
+	munis <- sf_from_parquet(munis, drop_geometry = TRUE)
+	study_codes <- unique(munis$code_muni)
+	stopifnot(length(study_codes) > 0L, !anyNA(study_codes))
+	n_outside_study_area <- individual_data |>
+		filter(is.na(code_muni_cad) | !code_muni_cad %in% study_codes) |>
+		nrow()
+	individual_data <- individual_data |>
+		filter(!is.na(code_muni_cad), code_muni_cad %in% study_codes) |>
+		compute()
 
-	## spatial criterion: remove bad geocoding
-	bad_geocoding <- individual_data |>
-		filter(desvio_metros > 500) |>
+	# A failing record excludes every family sharing its baseline address.
+	# Audit precedence assigns each excluded person once; it does not change eligibility.
+	unknown_geocoding <- individual_data |>
+		filter(is.na(desvio_metros)) |>
 		distinct(id_addr_cad) |>
 		pull()
-
-	## up-to-date criterion: cadunico registry becomes stale after two years
-	stale_entry <- individual_data |> filter(years_update > 2) |> distinct(id_addr_cad) |> pull()
-	n_bad_geocoding <- individual_data |> filter(id_addr_cad %in% bad_geocoding) |> nrow()
-	n_stale_entry <- individual_data |>
-		filter(!id_addr_cad %in% bad_geocoding & id_addr_cad %in% stale_entry) |>
+	bad_geocoding <- individual_data |>
+		filter(desvio_metros > assumptions$max_geo_dev) |>
+		distinct(id_addr_cad) |>
+		pull()
+	unknown_update <- individual_data |>
+		filter(is.na(years_update)) |>
+		distinct(id_addr_cad) |>
+		pull()
+	stale_entry <- individual_data |>
+		filter(years_update > assumptions$max_cad_outdated) |>
+		distinct(id_addr_cad) |>
+		pull()
+	bad_geocoding <- setdiff(bad_geocoding, unknown_geocoding)
+	unknown_update <- setdiff(unknown_update, c(unknown_geocoding, bad_geocoding))
+	stale_entry <- setdiff(stale_entry, c(unknown_geocoding, bad_geocoding, unknown_update))
+	n_unknown_geocoding <- individual_data |>
+		filter(id_addr_cad %in% unknown_geocoding) |>
 		nrow()
-
-	## eligible units (pending age criterion; will check downstream)
+	n_bad_geocoding <- individual_data |>
+		filter(id_addr_cad %in% bad_geocoding) |>
+		nrow()
+	n_unknown_update <- individual_data |>
+		filter(id_addr_cad %in% unknown_update) |>
+		nrow()
+	n_stale_entry <- individual_data |>
+		filter(id_addr_cad %in% stale_entry) |>
+		nrow()
+	excluded_addresses <- c(unknown_geocoding, bad_geocoding, unknown_update, stale_entry)
 	individual_data <- individual_data |>
-		filter_out(id_addr_cad %in% c(bad_geocoding, stale_entry)) |>
+		filter_out(id_addr_cad %in% excluded_addresses) |>
 		compute()
 
 	addresses <- individual_data |>
 		distinct(id_addr_cad, lat_cad, lon_cad) |>
 		collect() |>
 		sf::st_as_sf(coords = c("lon_cad", "lat_cad"), crs = 4326) |>
-		sf::st_transform(crs = 31983)
+		sf::st_transform(crs = assumptions$distance_crs)
 
 	# distance to stations
 	## register data on duckdb
@@ -165,9 +209,9 @@ define_risk_sets <- function(
 				id_y = "code_station",
 				drop_geometry = TRUE,
 				conn = conn,
-				dist_type = "planar",
+				dist_type = assumptions$distance_type,
 				max_distance = assumptions$max_dist_sharp,
-				candidate_crs = 31983
+				candidate_crs = assumptions$distance_crs
 			) |>
 				collect()
 		}
@@ -341,17 +385,18 @@ define_risk_sets <- function(
 	# #   filter(status_3, !(always_treated | new_treatment))
 	# # )
 
-	# age criterion: individuals must be [18, 60] years at the "opening anniversary" at the g_lag
+	# Completed ages 18 through 60 on January 1 of g, using baseline birth information.
+	# Date bounds avoid leap-year rounding and retain people throughout their 60th year.
+	birth_after <- as.Date(sprintf("%d-01-01", event_year - assumptions$age_max - 1L))
+	birth_on_or_before <- as.Date(sprintf("%d-01-01", event_year - assumptions$age_min))
 	individual_data <- individual_data |>
 		inner_join(arrow::as_arrow_table(treat_status), by = join_by(id_addr_cad)) |>
-		mutate(
-			age_opening_lag = (as.integer(reference_date) - as.integer(birthdate_cad)) /
-				365.25
-		) |>
 		compute()
 	out_of_age <- individual_data |>
 		filter(
-			!between(age_opening_lag, assumptions$age_min, assumptions$age_max)
+			is.na(birthdate_cad) |
+				birthdate_cad <= birth_after |
+				birthdate_cad > birth_on_or_before
 		) |>
 		pull(cpf)
 
@@ -360,10 +405,13 @@ define_risk_sets <- function(
 		compute()
 	n_out_of_age <- individual_data |> filter(cpf %in% out_of_age) |> nrow()
 	risk_set_audit <- tibble(
-		step = seq_len(7),
+		step = seq_len(10),
 		reason = c(
 			'initial',
+			'outside_study_area',
+			'unknown_geocoding_quality',
 			'bad_geocoding',
+			'unknown_update',
 			'stale_entry',
 			'outside_max_dist',
 			'forbidden_comparison',
@@ -372,7 +420,10 @@ define_risk_sets <- function(
 		),
 		n_records = c(
 			n0_ind,
+			n_outside_study_area,
+			n_unknown_geocoding,
 			n_bad_geocoding,
+			n_unknown_update,
 			n_stale_entry,
 			n_outside_max_dist,
 			n_forbidden_comparison,

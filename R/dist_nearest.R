@@ -570,34 +570,37 @@ dist_nearest_table <- function(
 			if (is.na(candidate_crs) || !identical(candidate_crs$units_gdal, "metre")) {
 				stop("`candidate_crs` must be a projected CRS with metre units.", call. = FALSE)
 			}
-			candidate_x <- paste0("dist_nearest_candidate_x_", unique_suffix)
-			candidate_y <- paste0("dist_nearest_candidate_y_", unique_suffix)
-			duckspatial::ddbs_transform(
-				x = x_indexed,
-				y = candidate_crs,
-				conn = conn,
-				name = candidate_x,
-				quiet = TRUE
-			)
-			on.exit(
-				if (DBI::dbIsValid(conn)) {
-					DBI::dbExecute(conn, paste("DROP TABLE IF EXISTS", quote_id(candidate_x)))
-				},
-				add = TRUE
-			)
-			duckspatial::ddbs_transform(
-				x = y_indexed,
-				y = candidate_crs,
-				conn = conn,
-				name = candidate_y,
-				quiet = TRUE
-			)
-			on.exit(
-				if (DBI::dbIsValid(conn)) {
-					DBI::dbExecute(conn, paste("DROP TABLE IF EXISTS", quote_id(candidate_y)))
-				},
-				add = TRUE
-			)
+			# x and y already share a known CRS; reuse indexed tables when no reprojection is needed.
+			if (!isTRUE(x_crs == candidate_crs)) {
+				candidate_x <- paste0("dist_nearest_candidate_x_", unique_suffix)
+				candidate_y <- paste0("dist_nearest_candidate_y_", unique_suffix)
+				duckspatial::ddbs_transform(
+					x = x_indexed,
+					y = candidate_crs,
+					conn = conn,
+					name = candidate_x,
+					quiet = TRUE
+				)
+				on.exit(
+					if (DBI::dbIsValid(conn)) {
+						DBI::dbExecute(conn, paste("DROP TABLE IF EXISTS", quote_id(candidate_x)))
+					},
+					add = TRUE
+				)
+				duckspatial::ddbs_transform(
+					x = y_indexed,
+					y = candidate_crs,
+					conn = conn,
+					name = candidate_y,
+					quiet = TRUE
+				)
+				on.exit(
+					if (DBI::dbIsValid(conn)) {
+						DBI::dbExecute(conn, paste("DROP TABLE IF EXISTS", quote_id(candidate_y)))
+					},
+					add = TRUE
+				)
+			}
 		}
 
 		candidate_table <- paste0("dist_nearest_pairs_", unique_suffix)

@@ -1,0 +1,13 @@
+---
+title: Address-level quality exclusions
+date: 2026-11-12
+status: APPROVED
+---
+
+User confirmed address-level exclusion of all families when any baseline record
+fails geocoding quality or registry recency. Missing quality and missing recency
+must also exclude, with separate audit reasons. Connect filters to max_geo_dev
+and max_cad_outdated. Use sequential, non-overlapping audit counts: unknown quality,
+excess geocoding deviation, unknown recency, excessive recency. Preserve the union
+of excluded addresses regardless of this reporting precedence. Do not run R or targets.
+Verify textual diff; functional checks and audit reconciliation remain pending.

@@ -1,0 +1,19 @@
+---
+title: RAIS extraction, classification and separate workplace geocoding
+date: 2026-11-12
+status: COMPLETED
+---
+
+Implement user-approved extraction without executing R: unique CPF roster from risk-set
+records only; nationwide annual RAIS lookup over time_window; preserve active December 31
+links; audit inactive, unknown, contract-type and duplicate categories; persist person-year
+classification so unknown records cannot become false zeros. Separate geocoding target,
+with empty-input handling, checked cardinality and workplace quality flags. Keep raw
+salary/hour information and explicit source-unit metadata; never assume monthly salary.
+Outcome aggregation and two salary-threshold variants remain downstream. family_records
+snapshot-window adjustment is deferred until Monday at the user's request.
+
+Preserve existing work. Check code and diffs textually only; do not run R, Air, tests,
+source extraction, targets or bootstrap. Functional verification remains pending.
+
+Implementation and textual review completed. Functional verification and restricted-data builds remain pending by user instruction. See quality_reports/session_logs/2026-11-12_rais-extraction.md.

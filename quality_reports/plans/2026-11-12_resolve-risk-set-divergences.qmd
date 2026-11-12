@@ -1,7 +1,7 @@
 ---
 title: "Resolver divergências entre risk sets e decisões DiD"
 date: 2026-11-12
-status: DRAFT
+status: COMPLETED
 ---
 
 ## Objetivo
@@ -29,3 +29,16 @@ Após escolhas: alinhar assumptions, builder, extração, DAG e documentação.
 Revisar diffs textualmente, sem validação funcional nesta sessão.
 O wrapper de patches falhou na sessão anterior; usar escrita direta delimitada
 seu funcionamento não foi corrigido, sem alterar o helper.
+
+## Decisões confirmadas
+
+Manter município de São Paulo, distância planar e suporte de 15 km.
+Idade em anos completos: 18–60 em 1º de janeiro de g, comum a todos os status.
+Retirar exclusão de menores no baseline; impor território no snapshot de baseline.
+Investigar também o warning de CRS de dist_nearest, sem executar R.
+
+## Resultado
+
+Código e registros alinhados às escolhas confirmadas. Reprojeção redundante em
+dist_nearest evitada quando candidate_crs já coincide com o CRS compartilhado.
+Somente revisão textual e git diff --check; R, Air, testes e targets não executados.

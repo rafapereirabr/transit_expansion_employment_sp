@@ -21,7 +21,7 @@ This file contains unfinished work only. Durable findings and decisions belong i
   `event_id`, station membership, exact dates, event classification and inclusion flags. Keep the
   station XLSX-to-target pipeline unchanged while doing this.
 - [ ] Build outcome-free rolling `risk_sets`: baseline residence and eligibility at `g - 4`, age
-  22--60 on the trial-service date, exact geodesic station distance, first/additional service,
+  18--60 on January 1 of g, planar station distance in EPSG:31983, first/additional service,
   absorbing study-window treatment assignment, not-yet-treated controls and comparison flags.
 - [ ] Derive `cpf_roster` only from eligible risk-set members; then reactivate nationwide RAIS
   extraction and construct outcomes. Do not restore the obsolete all-CadÚnico `person_roster` or
@@ -40,14 +40,14 @@ This file contains unfinished work only. Durable findings and decisions belong i
   baseline/end point, residential baseline and follow-up horizon. Use the actual opening year as the
   first post-treatment year for the December 31 outcome, retain exact opening dates and days of
   operation for diagnostics, and implement rolling risk sets with eligibility and residence at
-  `g - 4`. Use RMSP CadÚnico residents aged 22--60 on the package's trial-service date in `g`, with a
+  `g - 4`. Use São Paulo municipality CadÚnico residents aged 18--60 on January 1 of `g`, with a
   valid CPF and usable baseline geocode and no additional income cutoff. Define
   line-by-trial-service-date opening packages and
   assign `G_i` at the first eligible 2015--2023 package that adds public service within 2 km of the
   baseline address, then keep that assignment absorbing across later risk sets. Separate first from
   additional treatment using baseline service. Do not
   impose an `ever_observed_near_station` history or pool overlapping windows as repetitions of one
-  estimand. Use eligible not-yet-treated RMSP residents in the primary control risk set,
+  estimand. Use eligible not-yet-treated São Paulo municipality residents in the primary control risk set,
   subject to common-support and baseline-service restrictions. Implement a central robustness
   specification using the future Line 6 and Line 17 corridors as controls, and interpret it as the
   incremental effect of opening/operation conditional on planning and implementation rather than
@@ -80,7 +80,7 @@ This file contains unfinished work only. Durable findings and decisions belong i
   positive accessibility gains and report it with the full curve and support.
 - [ ] Implement the two agreed wage outcomes: real contractual hourly wage among workers formally
   employed on December 31, and an indicator for formal employment at or above the cohort-specific
-  median among all eligible employed members of the RMSP risk set at `g - 4`. Aggregate concurrent
+  median among all eligible employed members of the São Paulo municipality risk set at `g - 4`. Aggregate concurrent
   active links using total contractual salary
   over `(52 / 12) * total weekly hours`, remove exact duplicate links, deflate to December 2023 reais
   with the IPCA, and verify that contractual salary is standardized to a monthly unit across salary
@@ -89,7 +89,7 @@ This file contains unfinished work only. Durable findings and decisions belong i
 - [ ] Implement baseline-home-to-workplace geodesic distance among workers formally employed on
   December 31. Use `g - 4` residential latitude and longitude, workplace coordinates and an
   hours-weighted mean across concurrent active links. Compute with DuckDB Spatial outside R memory;
-  use exact geodesic distance for treatment and the outcome, reserving H3 for aggregation and
+  use planar EPSG:31983 distance for treatment and geodesic distance for the outcome, reserving H3 for aggregation and
   candidate spatial clustering. Audit
   missing workplace geocodes separately and describe the outcome as a conditional spatial mechanism,
   not as observed commute distance or travel time.
@@ -97,8 +97,7 @@ This file contains unfinished work only. Durable findings and decisions belong i
   persistent H3 candidate lookup for repeated station-distance cutoffs. Treat H3 only as candidate
   generation, require 100% recall against exact geodesic cutoffs on the study geography, and avoid
   adopting a fine resolution such as 11 without checking the expanded `gridDisk()` size.
-- [ ] If time permits, analyze people aged 18--21 on the package's trial-service date as a separate
-  school-to-work estimand; keep ages 22--60 on that date as the primary population.
+- [ ] Report age heterogeneity for 18--21 versus older members within the primary 18--60 population (age on January 1 of g).
 - [ ] After the initial annual analysis, evaluate secondary formal-employment attachment outcomes:
   annual days or month-equivalents employed and, if useful, quarterly or monthly panels. Keep
   hourly remuneration in the initial outcome set rather than deferring it with these extensions.
@@ -215,13 +214,14 @@ Current incident recovered and console responsiveness confirmed by the user. Evi
 
 ## DiD downstream — revision 2026-11-11 (not executed)
 
-- [ ] Resolve upstream design discrepancies before estimation: age/reference date, planar versus
-  geodesic distance, municipality versus RMSP, 15 km support, stale registry/geocoding exclusions.
+- [x] Resolve territory, distance, support and age: São Paulo municipality, planar EPSG:31983, 15 km, ages 18--60 on January 1 of g (2026-11-12). Code edited; execution pending.
+- [x] Define address-level quality exclusions and exclude missing quality/recency (2026-11-12).
+- [ ] Validate quality-exclusion union and sequential audit counts, including multiple families at one address and overlapping failure reasons; implementation remains unexecuted.
 - [ ] Produce the exposure table required by build_did_membership(): prospective first opening
   at the fixed address, prior absorbing assignment, independent L6/L17 overlap. Audit stations_nyet
   against strictly future openings; nearest station alone does not identify the first opening.
 - [ ] Build annual outcomes and extraction coverage; calculate the common baseline wage threshold
-  on the full eligible RMSP risk set before comparison/support restrictions. Resolve monthly salary
+  on the full eligible São Paulo municipality risk set before comparison/support restrictions. Resolve monthly salary
   units and workplace geocoding cardinality, preserving employment with missing establishments.
 - [ ] Format with air format ., parse, and run synthetic tests for the revised did helpers before
   any restricted-data run. No R, formatter, bootstrap or targets were executed in this revision.
@@ -233,3 +233,86 @@ Current incident recovered and console responsiveness confirmed by the user. Evi
   geographic dependence. Its current uncertainty conditions on constructed outcomes and exposure.
 - [ ] Reactivate spillover modes only on explicit instruction, after their flags and substantive
   accessibility threshold have been defined and audited. Do not activate by calendar date.
+
+- [ ] Rebuild person_files/person_records/person_audit after removing the baseline adult-only filter, then risk_sets and risk_set_plots after applying baseline municipal eligibility and exact age bounds. No R or targets executed on 2026-11-12; prior artifacts are stale for these definitions.
+
+## Anticipation and intervention history — revisit after Monday 2026-11-16
+
+- [ ] Add sourced dt_announcement and dt_groundbreak fields to the opening-event history,
+  with event/package linkage, source and date precision; retain unknown dates explicitly.
+  Define which announcement and construction milestone are relevant, including L6/L17 controls.
+- [ ] Decide the main anticipation specification after Monday 2026-11-16. Keep 0, 1
+  and 3 as candidates. With annual att_gt and universal base period, their references
+  are g - 1, g - 2 and g - 4; control eligibility also changes. Do not activate all
+  specifications or select a main one yet. Use dt_announcement/dt_groundbreak evidence.
+- [x] Fix legacy-service cutoff at 2010: additional requires old service by 2010 and
+  a focal opening; any opening in 2011 through g - 1 inside the baseline-address buffer
+  triggers drop_me, including addresses with a focal opening (2026-11-12).
+- [x] Remove the downstream truncation of outcome histories at the residential baseline.
+  For g = 2017, the 2011 start permits g - 6 outcomes; with anticipation = 3, 2011–2012
+  precede the 2013 reference. Implementation edited only, not executed.
+- [ ] Validate legacy-service boundary and exclusions, and annual outcome coverage before
+  baseline. Check missing RAIS coverage, actual pre-period support and the interpretation
+  of historical outcomes for a population selected at g - 4.
+
+- [ ] Compare the approved provisional fixed-2011 exclusion with the rolling g - 4
+  alternative before finalizing the design. Audit retained/excluded people, treated/control
+  composition and support by cohort and first/additional, with particular attention to
+  losses in additional. Keep other eligibility rules constant and do not choose by outcome
+  significance. Current code retains the fixed cutoff; no pipeline execution authorized.
+
+## RAIS implementation after specification interview — 2026-11-12
+
+- [ ] Implement the agreed celetista-only December 31 outcome using verified annual
+  tipo_vinculo codes; update reporting labels and dependent wage/distance populations.
+- [x] Implement active December 31 extraction and audit/status files (2026-11-12; unexecuted); retain restricted
+  person-year classification flags where unknown employment status or unknown contract
+  type could otherwise become a false zero. Aggregate audit counts alone are insufficient.
+- [x] Implement separate workplace geocoding target with checked key cardinality (unexecuted),
+  including empty inputs and missing establishment identifiers. Preserve current DAG edits.
+- [x] Resolve concurrent-link coverage choices: available-link wage/distance aggregation,
+  and two salary-indicator candidates selected after a coverage audit (2026-11-12).
+
+- [x] Decide partial wage/distance aggregation: use complete links and flag partial coverage.
+- [x] Require valid workplace coordinates and known work_desvio in [0, 500] metres.
+- [ ] Implement complete-coverage and available-link salary thresholds/indicators with
+  cohort-specific fixed baseline medians, coverage flags and classification audit.
+- [ ] Choose the main salary-indicator version after coverage/classification diagnostics
+  and before inspecting DiD effects; keep celetista employment primary. No R run authorized.
+
+## RAIS extraction implemented — 2026-11-12; execution pending
+
+- [x] Add risk-set CPF union, annual extraction files, CPF-year classification, aggregate
+  audits and separate workplace targets. No restricted source was read during implementation.
+- [ ] Inspect annual harmonized tipo_vinculo and emp_31dez schemas against the explicit
+  rais_spec mapping. Unknown codes are retained in the classification uncertainty audit.
+- [ ] Verify annual source coverage and populate coverage_confirmed_years before coding
+  absence as zero. By default only positive observed employment is classified, other cases NA.
+- [ ] Confirm salary-type field and whether salario is already monthly in the harmonized
+  source. No hourly/monthly conversion is performed by the extraction when units are unknown.
+- [ ] After execution is authorized: Air, parse, synthetic zero-match/empty/uncertain/duplicate
+  cases, DAG branching and a narrow annual source audit before a broad build.
+- [ ] Defer family_records time_window -> risk_set_years optimization until Monday 2026-11-16,
+  per user instruction; current extra family years are intentionally retained for now.
+
+## Preliminary DiD configuration implementation — 2026-11-12
+
+- [ ] Expand the preliminary grid to the full outcome set including both wage-threshold
+  variants; compare unadjusted and baseline age/sex/race/literacy-adjusted models.
+- [ ] Start anticipation = 0; retain 1 and 3 for subsequent scenarios. Do not select
+  models by effect significance. Resolve follow-up, controls and missing covariates next.
+
+- [ ] Implement preliminary cohort trajectories without an across-year/cohort average.
+- [ ] Generalize corridor-control flags/spec labels: proposed yr_open > 2023 excluding
+  Ambuita and Varginha, including L2 to Penha and dated L17 future segments; preserve
+  independent overlap flags. Varginha is approved as future exposure, excluded from corridor controls.
+- [ ] Audit missing/invalid baseline sex, race and literacy by year, cohort, service stratum and treatment/control; choose handling after this audit, before estimation. No automatic deletion or unknown-category coding yet.
+
+- [ ] Implement per-model skip/failure/support status and continue the remaining grid;
+  preserve reasons without persisting confidential values in logs. Do not force fits by
+  silently changing the specification. Use approved H3-7 baseline clustering for preliminary inference; H3-6 sensitivity later.
+
+- [ ] Implement and verify preliminary H3-7 spatial inference from fixed baseline cells,
+  preserving repeated-person dependence across risk sets; audit cluster counts and treated
+  concentration. Current person-only bootstrap is not yet compliant with this choice.
+- [ ] Add H3-6 inference as a subsequent sensitivity, without selecting resolution by significance.

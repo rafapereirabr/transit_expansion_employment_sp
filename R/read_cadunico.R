@@ -124,14 +124,14 @@ check_cpf <- function(cpf) {
 	formatted & !repeated & digits[, 10L] == check_1 & digits[, 11L] == check_2
 }
 
-flag_person_records <- function(data, duplicate_cpf, min_age = 18) {
+flag_person_records <- function(data, duplicate_cpf) {
 	data <- as.data.frame(data)
 	data$drop_reason <- dplyr::case_when(
 		is.na(data$cpf) ~ 'missing_cpf',
 		data$cpf %in% duplicate_cpf ~ 'duplicate_cpf',
 		!check_cpf(data$cpf) ~ 'invalid_cpf',
 		is.na(data$age) ~ 'missing_birthdate',
-		data$age < min_age ~ 'under_18',
+		data$age < 0 ~ 'invalid_birthdate',
 		.default = 'retained'
 	)
 	data
@@ -180,7 +180,7 @@ read_cad_individuals <- function(year, families, cols_individ, save_dir = NULL) 
 	matched_ind <- individ |>
 		inner_join(families, by = 'co_familiar_fam')
 
-	## remove minors
+	## Validate birth information here; age eligibility belongs to the focal risk set.
 	end_of_year <- paste(year, 12, 31, sep = "-") |>
 		as.Date()
 	matched_ind <- matched_ind |>
@@ -194,7 +194,7 @@ read_cad_individuals <- function(year, families, cols_individ, save_dir = NULL) 
 		'duplicate_cpf',
 		'invalid_cpf',
 		'missing_birthdate',
-		'under_18',
+		'invalid_birthdate',
 		'retained'
 	)
 	cpf_audit <- matched_ind |>

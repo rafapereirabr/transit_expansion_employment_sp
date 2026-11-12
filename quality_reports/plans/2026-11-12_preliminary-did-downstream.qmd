@@ -1,0 +1,26 @@
+---
+title: Preliminary DiD downstream while RAIS runs
+date: 2026-11-12
+status: APPROVED
+---
+
+User will run targets only through rais_workplaces. Freeze upstream R/read_rais.R,
+R/define_treatment.R, CadUnico/routing helpers and _targets.R during this task.
+Defer Varginha and corridor expansion; preserve currently available L6/L17 comparison.
+
+Update only R/did* and records: full five-outcome grid, adjusted/unadjusted baseline
+models, anticipation 0 with future scenarios supported, missing covariates audit before
+policy selection, per-model skips, annual trajectories without across-cohort averaging.
+Implement H3-7 cluster pairs bootstrap jointly across strata/models WITHIN each focal
+risk set. Do not claim independent cohorts or produce cross-cohort covariance/bands:
+people may have different baseline cells across risk sets. Such joint cross-cohort
+inference remains a separate requirement before reporting cross-cohort contrasts.
+Within-cohort combined effects retain joint inference and bootstrapped treated weights.
+
+Require an explicit baseline H3-7 column; never use H3-9 under an H3-7 label. Preserve
+strict source-coverage checks and separate missing outcome versus missing covariate
+policies. Save aggregate audit outputs; avoid restricted values in error logs.
+
+Verification remains textual: no R, analysis, tests or targets executed by this agent.
+Functional checks must follow before activating DiD targets. Current pipeline execution
+is a user-run verification build, not proof of downstream readiness.

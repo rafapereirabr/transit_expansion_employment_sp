@@ -1,0 +1,5 @@
+{
+  "positron.r.kernel.env": {
+    "R_LIBS_USER": "renv/library/windows/R-4.6/x86_64-w64-mingw32"
+  }
+}

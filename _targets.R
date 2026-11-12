@@ -176,7 +176,7 @@ list(
 	),
 	tar_target(
 		name = munis_sf,
-		command = get_munis(save_path = "data/munis_rmsp.parquet", overwrite = T, rmsp = FALSE),
+		command = get_munis(save_path = "data/munis_spo.parquet", overwrite = TRUE, rmsp = FALSE),
 		format = "file"
 	),
 	tar_target(
@@ -424,12 +424,12 @@ list(
 	tar_target(
 		name = person_files,
 		command = read_cad_individuals(
-			year = time_window,
+			year = risk_set_years,
 			families = family_records,
 			cols_individ = cad_ind_cols,
 			save_dir = restricted_dir
 		),
-		pattern = map(time_window),
+		pattern = map(risk_set_years),
 		format = "file",
 		deployment = "worker"
 	),
@@ -453,6 +453,7 @@ list(
 			stations = stations_sf,
 			events = opening_events,
 			individual_data = person_records,
+			munis = munis_sf,
 			assumptions = treat_assumptions,
 			save_dir = restricted_dir
 		),
@@ -473,13 +474,60 @@ list(
 	),
 
 	## outcomes --------------------------------------------------------------------------------
-	# tar_target(
-	# 	name = rais_records,
-	# 	command = read_rais(time_window, cpf_roster, restricted_dir),
-	# 	pattern = map(time_window),
-	# 	format = "file",
-	# 	deployment = "worker"
-	# ),
+	tar_target(
+		name = cpf_roster,
+		command = build_cpf_roster(risk_sets, restricted_dir),
+		format = "file"
+	),
+	tar_target(
+		name = rais_spec,
+		command = make_rais_spec(),
+		format = "rds"
+	),
+	tar_target(
+		name = rais_files,
+		command = read_rais(time_window, cpf_roster, restricted_dir, rais_spec),
+		pattern = map(time_window),
+		format = "file",
+		deployment = "worker"
+	),
+	tar_target(
+		name = rais_records,
+		command = rais_files[["records"]],
+		pattern = map(rais_files),
+		format = "file"
+	),
+	tar_target(
+		name = rais_person_year,
+		command = rais_files[["person_year"]],
+		pattern = map(rais_files),
+		format = "file"
+	),
+	tar_target(
+		name = rais_audits,
+		command = rais_files[c("link_audit", "person_audit", "manifest")],
+		pattern = map(rais_files),
+		format = "file"
+	),
+	tar_target(
+		name = rais_workplace_files,
+		command = get_work_location(rais_records, time_window, restricted_dir, rais_spec),
+		pattern = map(rais_records, time_window),
+		format = "file",
+		deployment = "worker"
+	),
+	tar_target(
+		name = rais_workplaces,
+		command = rais_workplace_files[["records"]],
+		pattern = map(rais_workplace_files),
+		format = "file"
+	),
+	tar_target(
+		name = rais_workplace_audits,
+		command = rais_workplace_files[["audit"]],
+		pattern = map(rais_workplace_files),
+		format = "file"
+	),
 
 	## estimation ------------------------------------------------------------------------------
 	tar_target(

@@ -81,7 +81,7 @@ population and does not by itself identify a causal wage effect for the baseline
 
 The complementary, more defensible outcome is an indicator for holding a formal job on December 31
 whose real contractual hourly wage is at least the median among all eligible employed members of that
-cohort's RMSP risk set at `g - 4`. The threshold is common to treated and comparison groups and does
+cohort's São Paulo municipality risk set at `g - 4`. The threshold is common to treated and comparison groups and does
 not change across comparison-group robustness specifications. The outcome equals zero for a valid
 non-employed person-year and `NA` when coverage or wage classification fails. It is defined for the
 full baseline cohort and may support a causal policy contrast subject to the DiD assumptions.
@@ -93,11 +93,7 @@ The policy brief also uses baseline-home-to-workplace geodesic distance as a spa
 outcome among people formally employed on December 31. Measure distance from the fixed `g - 4`
 residential latitude and longitude to each active workplace, then average concurrent links using
 weekly contracted hours as weights. Compute the ellipsoidal distance outside R memory with DuckDB
-Spatial. Exact geodesic distance, not H3 membership, defines the 2 km treatment buffer; H3 remains
-available for territorial aggregation and candidate spatial clustering. Projected
-`ST_DWithin()` may reduce candidate pairs only when a conservative margin is followed by the
-exact geodesic cutoff. Nearest-station risk-set calls omit origins outside that exact cutoff rather
-than returning them with a missing distance. The outcome is `NA` for
+Spatial. Treatment and risk-set support instead use planar distance in EPSG:31983: a 2 km treatment buffer and a 15 km support limit. H3 remains available for aggregation and candidate clustering. The outcome is `NA` for
 non-employed person-years or when required geocodes
 cannot be resolved. It is conditional on formal employment and workplace geocoding, and a positive
 estimate is not interpreted as a worse commute: greater distance can reflect an expanded labor
@@ -112,13 +108,19 @@ short; preserve the exact opening date and days of operation before December 31 
 and support diagnostics. Report it separately from the primary average beginning in the first full
 calendar year of operation, using a common follow-up horizon across included cohorts.
 
-The source population is eligible CadÚnico residents of the RMSP, so municipal borders do not cut a
-2 km treatment buffer. Baseline eligibility currently requires registration, a valid CPF and a
-usable residential geocode at `g - 4`, without an additional income cutoff. The primary population
-is age 22--60 on the package's trial-service date in `g`, calculated from birth information available
-at baseline; subsequent aging does not remove a person from the fixed cohort. Formal employment is
-measured from nationwide RAIS links for the cohort roster and is not filtered by workplace
-municipality.
+The source population is eligible CadÚnico residents of São Paulo municipality at g - 4,
+within 15 km planar distance of at least one station in the risk-set station categories
+(existing, intervening, focal, future study openings, or planned L6/L17). This support limit
+is not a 15 km radius around only the focal opening. Residential eligibility follows the
+baseline municipal code; station buffers may cross municipal boundaries, but residents
+outside the municipality are excluded. No additional income cutoff is imposed.
+
+The primary population is age 18--60 in completed years on January 1 of g, using birth
+information available at baseline. The reference date is common to all treatment/control
+statuses. The person extraction must not exclude minors at g - 4. Subsequent aging,
+residential mobility or absence from CadÚnico does not remove a person from the fixed cohort.
+Nationwide RAIS links are not restricted by workplace municipality. These user-confirmed
+choices (2026-11-12) supersede RMSP, geodesic treatment distance and 22--60 at opening.
 
 The causal target is the intention-to-treat effect of opening and operating new rapid transit service
 as assigned from `g - 4` residence, in a setting where planning, construction and expectations may
@@ -127,7 +129,7 @@ explicit anticipation diagnostics; they are not the total effect of the project 
 
 The distance-based design uses rolling cohort-specific risk sets. For each opening cohort `g`,
 eligibility, residence and baseline service are measured at `g - 4`. A line-by-trial-service-date
-package is the operational event. Exact distance from the baseline residence to its station points
+package is the operational event. Planar distance in EPSG:31983 from baseline residence to station points
 defines exposure: a person is treated when new public line or station service becomes available
 within 2 km, including additional service at a previously served location. First treatment and
 additional treatment are separate baseline-service strata. Walking travel time to stations is a
@@ -143,7 +145,7 @@ treatment. The design does not attempt to recover lifetime transit-exposure hist
 `ever_observed_near_station` restriction; claims concern first assigned exposure to expansions in
 the study window, conditional on each cohort''s `g - 4` residence.
 
-The primary comparison group for each cohort is the RMSP rolling risk set of eligible,
+The primary comparison group for each cohort is the São Paulo municipality rolling risk set of eligible,
 not-yet-treated residents, subject to common-support and baseline-service strata. A local-spillover
 sensitivity excludes comparison residents between 2 and 4 km from a new opening. A stricter combined
 sensitivity also excludes comparison residents beyond 4 km whose modeled accessibility gain exceeds
@@ -166,7 +168,7 @@ pooled OLS and `aggte()`'s `overall` aggregation. Joint uncertainty for this com
 still pending a person-level bootstrap and must not be inferred from the two separate standard
 errors.
 
-CadÚnico population preparation retains the annual histories of every family observed in the RMSP
+CadÚnico population preparation retains the annual histories of every family observed in São Paulo municipality
 at least once during the analysis window. After building `family_records` on 2026-11-05, an audit of
 `year × co_familiar_fam` returned no duplicates, so no within-year record-selection rule is needed.
 The harmonized person-table schema varies across years: CPF, birth date and family key are core
@@ -478,3 +480,171 @@ follow-up length, excluding the opening year.
 [LEARN:did] Passing outcome-free risk-set files (including their audit artifact) directly to
 att_gt, or using representative-station dates as G, is invalid → build audited membership and
 an annual outcome panel first; retain prospective controls' actual treatment timing.
+
+[LEARN:eligibility] Excluding under-18s during baseline extraction removes people who become eligible by January 1 of g. Validate birth information upstream and apply completed-age bounds only in the risk set. Family presence in the study area at any time does not establish baseline residence; filter baseline municipal codes explicitly.
+
+## Address-level quality eligibility — confirmed 2026-11-12
+
+Keep max_geo_dev = 500 metres and max_cad_outdated = 2 years as explicit assumptions.
+Any baseline record with excessive or missing geocoding deviation, or excessive or
+missing registry age, excludes every family at the same address. Unknown quality is
+excluded even with valid coordinates. Audit reasons are sequential and mutually exclusive:
+unknown_geocoding_quality, bad_geocoding, unknown_update, stale_entry. This precedence
+only allocates counts; the exclusion is the union of all four address sets. Counts include
+people excluded because another family at their address fails the rule. Code edited but
+not executed; this is not a finding about exclusion frequencies.
+
+## Legacy service and pre-periods — confirmed 2026-11-12
+
+The approved provisional main design fixes legacy service at 2010 (legacy_service_end),
+with exclusions beginning in 2011, rather than using the rolling g - 4 cutoff.
+At the baseline address, any station opening from 2011 through g - 1 within the
+2 km buffer triggers drop_me, including addresses also covered by a focal opening.
+Additional requires service opened by 2010 plus focal new service, without a forbidden
+intervening opening. Historical service is not recoded as the focal treatment year.
+The rolling [g - 4, g - 1] exclusion remains an alternative design. Final choice depends
+on an outcome-free audit of losses, composition and support by cohort and baseline-service
+stratum, especially additional. The alternatives may target different populations;
+2011 is the start of observation, not proof that older-service effects have stabilized.
+
+Residential eligibility remains at g - 4. The outcome panel retains all explicitly
+requested annual years, including 2011 onward before the residential baseline.
+For g = 2017, 2011 is g - 6; with anticipation = 3, the reference is 2013 and
+2011–2012 precede the allowed anticipation window. Those observations describe the
+cohort selected at the later residential baseline, not residence already fixed in 2011.
+Anticipation values 0, 1 and 3 are candidates; no final choice is made until after
+Monday 2026-11-16 and the announcement/construction chronology is considered.
+
+[LEARN:did] Conflating g - 4 residential eligibility with the first available outcome
+year unnecessarily removed earlier pre-periods. Keep the full requested annual outcome
+history for baseline cohort members, with explicit coverage checks.
+
+## RAIS extraction choices — confirmed 2026-11-12
+
+The primary December 31 employment outcome covers only celetista employment,
+including public and private employers. Statutory and other non-celetista categories
+are outside this outcome; results must be described as celetista employment rather
+than all formal employment. Verify exact eligible codes against the annual source
+dictionary before implementing the filter; do not guess codes.
+
+Persist active December 31 links, with an audit of the other records examined during
+extraction. Geocoding belongs to a separate target, so employment construction does
+not depend on successful workplace geocoding. Missing/invalid status must remain
+classifiable as unknown downstream, rather than disappearing into an apparent no-match.
+The missing-outcome convention already agreed remains in force. These are approved
+requirements, not an assertion that the extraction changes have been implemented.
+
+## Partial concurrent-job outcomes — confirmed 2026-11-12
+
+For a person with multiple active celetista links on December 31, calculate hourly
+wage using only links with valid salary and contracted hours, and workplace distance
+using only links with valid workplace coordinates and weighting hours. The eligible
+link subsets may differ between outcomes. For wage, use salary and hours from the
+same complete-link subset in both numerator and denominator; for distance, renormalize
+hours weights over its complete-link subset. No usable links means NA, never zero.
+
+Flag partial coverage separately for each outcome and retain the total number of active
+eligible links and the number contributing to each calculation. Do not describe partial
+aggregates as covering every job. Missing wage/location data do not invalidate an
+observed celetista-employment indicator. The use of partial wages in the baseline median
+and the above-median indicator remains to be decided separately.
+
+## Workplace quality — confirmed 2026-11-12
+
+For the distance outcome, require valid workplace coordinates, known work_desvio
+between 0 and 500 metres, and valid weighting hours. Use the complete-link subset,
+flag partial coverage, and return NA if no links qualify. Employment remains classified
+independently. The median/threshold outcome follows the approved two-version comparison below.
+
+## Salary-indicator coverage comparison — approved 2026-11-12
+
+Keep celetista employment as the primary outcome. Construct two candidate versions
+of the baseline wage threshold and employment-at-or-above-threshold indicator:
+
+- Complete coverage: hourly wage requires valid salary and hours in every active
+  eligible celetista link; the cohort baseline median uses employed members meeting
+  that requirement. Employed person-years without full wage coverage are unclassified (NA).
+- Available-link coverage: aggregate salary and hours over complete links available,
+  including people with incomplete link coverage and an explicit coverage flag; the
+  cohort baseline median uses employed members with at least one usable link.
+  Employed person-years with no usable links are unclassified (NA).
+
+For each version, fix the threshold at g - 4 before restricting comparison groups,
+using the eligible Sao Paulo municipality risk set. A confirmed non-employed
+person-year is zero in both indicators; unknown employment remains NA. Do not remove
+people from the baseline roster because their wage outcome is unknown.
+
+Select the main salary-indicator version after the coverage audit and before inspecting
+DiD effect estimates. Audit complete/incomplete/unusable coverage by year, cohort,
+treatment/control and first/additional, the two baseline medians, classification
+agreement/disagreement where both indicators are observed, and cases classifiable only
+with available links. Thresholds describe their observed wage populations; neither
+is automatically the median for all eligible employed people. Both versions and their
+coverage limitations must remain distinguishable. This is a specification decision;
+construction and empirical audit have not been run.
+
+## RAIS extraction contract — implemented 2026-11-12, not executed
+
+The union cpf_roster is derived from risk-set records and searched in each annual
+RAIS source independently of CadUnico reappearance. read_rais now persists active
+links, CPF-year classification, aggregate audits and a manifest. Unknown statuses/types
+are recorded before discarding non-active links. Only explicit annual coverage confirmation
+allows zero in the absence of positive or uncertain eligible links. The default
+coverage_confirmed_years is empty; source completeness is not inferred from a successful read.
+
+Workplace geocoding is a separate establishment-key lookup target and never determines
+observed employment. Salary units remain explicit: preserve raw salario and its available
+type, do not assume monthly salary or substitute rem_med_r for contractual salary.
+The downstream outcome and panel assembly remain to be implemented. The family_records
+snapshot-window optimization is deferred until Monday 2026-11-16 by user instruction.
+
+## Preliminary DiD configuration — interview 2026-11-12
+
+User selected the full preliminary outcome set: December 31 celetista employment,
+both candidate wage-threshold indicators, hourly contractual wage, and baseline-home
+to workplace distance. Keep celetista employment primary; conditional wage/distance
+contrasts retain their selected-population interpretation. The main wage-threshold
+version is not selected until the coverage audit, before viewing DiD effects.
+
+Compare an unadjusted specification with adjustment for baseline age, sex, race and
+literacy. Freeze these covariates at the residential baseline within each risk set;
+coding, functional form, missing-value handling and support checks remain to be settled.
+Start the first preliminary run with anticipation = 0. Evaluate 1 and 3 later;
+this computational sequence does not establish no anticipation or choose a final model.
+No analysis was executed as part of this decision record.
+
+## Preliminary trajectories and corridor proposal — 2026-11-12
+
+Show all available cohort trajectories, separating opening year from full years;
+do not calculate a pooled/common-horizon average in the first preliminary round.
+Run the main and corridor comparisons separately. User broadens the corridor proposal
+from L6/L17 to stations with yr_open > 2023, excluding Ambuita and Varginha; this includes
+L2 through Penha. The current curated catalog also includes L17 segments dated 2032/2034.
+This operational filter depends on the curated year, not on proven common construction
+stage during the outcome window. Stations with unknown years are not implicitly included.
+The previous L6/L17-specific labels will need a general corridor name in implementation.
+
+Varginha has catalog opening year 2025: future exposure history is distinct from
+membership in the corridor comparison. User confirmed its inclusion in future-treatment history, while excluding it from the corridor comparison. Do not infer absence of planning effects
+from its post-2023 opening. Audit missing/invalid baseline sex, race and literacy by cohort and group first; choose missing-covariate handling after this audit and before estimation. No complete-case restriction or unknown category is approved yet.
+
+## Preliminary model failure policy — confirmed 2026-11-12
+
+Suspend a cohort x service-stratum x comparison x specification model when eligible
+controls are absent, fitting fails, or pre-defined support diagnostics are inadequate.
+Record the reason and continue other models. Do not silently simplify adjustment, pool
+cohorts or change controls to force a result. Diagnose support using counts and baseline
+covariate overlap, not outcome significance. Thresholds require a transparent audit.
+User approved H3 resolution 7 clustering for preliminary intervals; resolution 6 is a subsequent sensitivity (2026-11-12).
+
+## Preliminary spatial inference — approved 2026-11-12
+
+Use H3 resolution 7 cells from g - 4 residence, fixed across outcome years within each
+risk set, for preliminary clustered inference. Evaluate resolution 6 subsequently.
+This is a preliminary clustering choice, not evidence that dependence ends at cell borders.
+Audit cluster counts, treated/control distribution and concentration for each fitted model.
+Joint inference must preserve repeated people across risk sets, including those with different
+baseline cells across cohorts; independent per-fit cluster draws are not sufficient for
+combined or cross-model inference. The existing person bootstrap does not implement this
+spatial contract and must be revised and verified before reporting spatial intervals.
+No R, targets, bootstrap or empirical inference was executed when recording this choice.

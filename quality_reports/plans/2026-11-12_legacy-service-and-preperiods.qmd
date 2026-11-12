@@ -1,0 +1,17 @@
+---
+title: Fixed legacy-service cutoff and historical outcome window
+date: 2026-11-12
+status: APPROVED
+---
+
+User confirms: additional requires legacy service opened by 2010; exposure to an
+opening in 2011 through g - 1 excludes the address, even with another opening at g.
+Replace the rolling g - 4 station cutoff with explicit legacy_service_end = 2010.
+Keep outcome years back to 2011 for the fixed baseline cohort: residential eligibility
+at g - 4 does not require dropping earlier outcomes. Anticipation 0, 1 and 3 remain
+candidates, with the main choice deferred until after Monday 2026-11-16.
+
+Change R/define_treatment.R, R/did_panel.R and canonical records. Preserve existing
+edits. No R, Air, tests or targets execution; textual diff checks only. Later checks
+must cover 2010/2011 boundaries, overlapping old/recent/focal openings and years before
+the residential baseline. Earlier outcomes remain conditional on later baseline eligibility.
