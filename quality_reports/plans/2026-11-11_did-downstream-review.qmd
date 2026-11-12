@@ -1,0 +1,45 @@
+---
+title: "Revisão DiD downstream"
+date: 2026-11-11
+status: COMPLETED
+---
+
+## Objetivo e autorização
+
+Revisar scripts, specs e bootstrap sem executar R ou análise, por solicitação do usuário.
+Preservar alterações existentes e não reativar RAIS/routing/estimação.
+
+## Contexto
+
+Risk sets anuais ainda não têm painel de outcomes, ano prospectivo de primeira cobertura,
+histórico de atribuição absorvente nem flag independente dos corredores L6/L17.
+A estação representativa não identifica necessariamente a primeira abertura futura.
+Idade, referência temporal, distância planar e restrição territorial atuais divergem de
+MEMORY.md; resolver explicitamente antes da estimação.
+
+## Plano
+
+1. Separar specs e inferência.
+2. Criar contrato validado entre risk sets e painel; não inferir datas da estação mais próxima.
+3. Revisar amostras, extração focal e agregação.
+4. Implementar bootstrap conjunto por pessoa entre risk sets e estratos.
+5. Corrigir referências futuras do DAG e registrar pendências.
+
+Spillovers permanecem suspensos sem reativação automática. Specs reservam filtros explícitos
+para retomada. Baseline residencial g - 4 não é referência DiD g - anticipation - 1.
+Outcomes condicionais ao emprego não identificam automaticamente efeitos para toda a coorte.
+Inferência por pessoa não cobre dependência espacial.
+
+## Verificação
+
+Somente inspeção textual nesta sessão. Air, parse, testes sintéticos, benchmark e targets
+ficam pendentes por instrução do usuário. Testar controles futuros, estratos ausentes,
+painel incompleto, pessoas repetidas e falhas do bootstrap antes de usar dados reais.
+API consultada: <https://bcallaway11.github.io/did/reference/att_gt.html>.
+
+
+## Resultado da revisão
+
+Edições concluídas; execução e validação funcional permanecem pendentes conforme solicitado.
+A inspeção textual com git diff --check passou. Detalhes e próximos passos em
+quality_reports/session_logs/2026-11-11_did-downstream-review.md.

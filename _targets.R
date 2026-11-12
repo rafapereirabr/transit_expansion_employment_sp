@@ -175,13 +175,8 @@ list(
 		format = "file"
 	),
 	tar_target(
-		name = spo_sf,
-		command = get_munis(save_path = "data/muni_spo.parquet", overwrite = T, rmsp = FALSE),
-		format = "file"
-	),
-	tar_target(
 		name = munis_sf,
-		command = get_munis(save_path = "data/munis_rmsp.parquet", overwrite = T),
+		command = get_munis(save_path = "data/munis_rmsp.parquet", overwrite = T, rmsp = FALSE),
 		format = "file"
 	),
 	tar_target(
@@ -199,13 +194,12 @@ list(
 		format = "file"
 	),
 
-
 	## plots -----------------------------------------------------------------------------------
 	tar_target(
 		name = transit_map,
 		command = plot_lines(
 			footprint_sf = footprint_sf,
-			munis_sf = spo_sf,
+			munis_sf = munis_sf,
 			lines_sf = lines_sf,
 			stations_sf = stations_sf,
 			metro_palette = metro_palette,
@@ -382,6 +376,25 @@ list(
 	# 	deployment = "main"
 	# ),
 
+	## treatment assumptions -------------------------------------------------------------------
+	tar_target(
+		name = treat_assumptions,
+		command = list_assumptions(time_window, max_dist_sharp = 15e3),
+		format = "rds"
+	),
+	tar_target(
+		name = opening_events,
+		command = set_opening_events(stations_sf, treat_assumptions) |>
+			dplyr::group_by(yr_open) |>
+			targets::tar_group(),
+		iteration = "group"
+	),
+	tar_target(
+		name = risk_set_years,
+		command = unique(opening_events$yr_open) - treat_assumptions$g_lag,
+		format = "rds"
+	),
+
 	## population data -------------------------------------------------------------------------
 	tar_target(
 		name = family_records,
@@ -396,10 +409,15 @@ list(
 		name = cad_ind_cols,
 		command = select_available_cols(
 			col_string = c(
-				"co_familiar_fam", "cpf_recuperado", "dt_nasc_pessoa", "co_sexo_pessoa", "co_raca_cor_pessoa", "co_deficiencia_memb", "co_sabe_ler_escrever_memb",
-				"co_principal_trab_memb", "co_trabalho_12_meses_memb", "in_dormir_rua_memb", "in_dormir_albergue_memb", "in_dormir_dom_part_memb", "in_dormir_outro_memb"
+				"co_familiar_fam",
+				"cpf_recuperado",
+				"dt_nasc_pessoa",
+				"co_sexo_pessoa",
+				"co_raca_cor_pessoa",
+				"co_deficiencia_memb",
+				"co_sabe_ler_escrever_memb"
 			),
-			years = time_window
+			years = risk_set_years
 		),
 		format = "rds"
 	),
@@ -429,6 +447,30 @@ list(
 	),
 
 	## treatment design ------------------------------------------------------------------------
+	tar_target(
+		name = risk_sets,
+		command = define_risk_sets(
+			stations = stations_sf,
+			events = opening_events,
+			individual_data = person_records,
+			assumptions = treat_assumptions,
+			save_dir = restricted_dir
+		),
+		pattern = map(opening_events),
+		format = "file",
+		deployment = "worker"
+	),
+	tar_target(
+		name = risk_set_plots,
+		command = plot_risk_sets(
+			risk_set = risk_sets,
+			events = opening_events,
+			stations = stations_sf,
+			lines_sf = lines_sf
+		),
+		pattern = map(risk_sets, opening_events),
+		format = "file"
+	),
 
 	## outcomes --------------------------------------------------------------------------------
 	# tar_target(
@@ -439,39 +481,38 @@ list(
 	# 	deployment = "worker"
 	# ),
 
-
 	## estimation ------------------------------------------------------------------------------
 	tar_target(
 		name = did_spec,
-		command = make_did_spec() |>
-			dplyr::group_by(spec_id) |>
-			tar_group(),
-		iteration = 'group',
-		format = 'rds'
+		command = make_did_spec(spillover = "none"),
+		format = "rds"
+	),
+	tar_target(
+		name = did_inference,
+		command = make_did_inference(biters = 999L, seed = 20261111L),
+		format = "rds"
 	)
-	# Future wiring, activated after risk_sets exists and did enters renv:
+	# Dormant until audited membership and annual outcomes exist. risk_sets contains
+	# baseline records + an audit file, not an outcome panel: never pass it to att_gt.
+	# membership must resolve prospective G at the fixed baseline address, prior
+	# absorbing assignment, baseline-service strata and independent L6/L17 flags.
 	# tar_target(
-	# 	name = did_fit,
-	# 	command = run_att_gt(
-	# 		data = risk_sets,
-	# 		spec = did_spec,
-	# 		cores = as.integer(Sys.getenv('did_cores', '1'))
-	# 	),
-	# 	pattern = cross(risk_sets, did_spec),
-	# 	iteration = 'list'
+	# 	name = did_panel,
+	# 	command = build_did_panel(did_membership, did_outcomes, time_window),
+	# 	format = "rds"
 	# ),
 	# tar_target(
-	# 	name = att_focal,
-	# 	command = extract_focal_att(did_fit),
-	# 	pattern = map(did_fit),
-	# 	iteration = 'list'
+	# 	name = did_point,
+	# 	command = estimate_did_grid(did_panel, did_spec),
+	# 	format = "rds"
 	# ),
+	# Joint inference must consume all risk sets together, not independent branches.
+	# Specify cohorts + horizon in BOTH calls before reporting a full-year average.
 	# tar_target(
-	# 	name = att_combined,
-	# 	command = combine_att(att_focal),
-	# 	format = 'rds'
+	# 	name = did_joint,
+	# 	command = bootstrap_did(did_panel, did_spec, did_inference),
+	# 	format = "rds"
 	# ),
-
 
 	## routing ---------------------------------------------------------------------------------
 	# tar_target(

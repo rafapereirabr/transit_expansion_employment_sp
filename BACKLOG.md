@@ -212,3 +212,24 @@ Current incident recovered and console responsiveness confirmed by the user. Evi
   network/UNC repositories. The current pre-release has no release-channel build; isolating Codex
   with `extensions.experimental.affinity` restores sub-second R interaction but mitigates rather
   than fixes the watcher.
+
+## DiD downstream — revision 2026-11-11 (not executed)
+
+- [ ] Resolve upstream design discrepancies before estimation: age/reference date, planar versus
+  geodesic distance, municipality versus RMSP, 15 km support, stale registry/geocoding exclusions.
+- [ ] Produce the exposure table required by build_did_membership(): prospective first opening
+  at the fixed address, prior absorbing assignment, independent L6/L17 overlap. Audit stations_nyet
+  against strictly future openings; nearest station alone does not identify the first opening.
+- [ ] Build annual outcomes and extraction coverage; calculate the common baseline wage threshold
+  on the full eligible RMSP risk set before comparison/support restrictions. Resolve monthly salary
+  units and workplace geocoding cardinality, preserving employment with missing establishments.
+- [ ] Format with air format ., parse, and run synthetic tests for the revised did helpers before
+  any restricted-data run. No R, formatter, bootstrap or targets were executed in this revision.
+- [ ] Validate joint resampling of repeated people, changing stratum weights, failed replicates,
+  same-year treatment exclusion, prospective control removal, and missing outcome coverage.
+- [ ] Confirm installed did API and benchmark a representative focal risk set without bootstrap.
+- [ ] Choose common cohorts/horizon, baseline covariates and overlap diagnostics; determine spatial
+  inference and the reported multiple-testing family. Person bootstrap alone is insufficient for
+  geographic dependence. Its current uncertainty conditions on constructed outcomes and exposure.
+- [ ] Reactivate spillover modes only on explicit instruction, after their flags and substantive
+  accessibility threshold have been defined and audited. Do not activate by calendar date.

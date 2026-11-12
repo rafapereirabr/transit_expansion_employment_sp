@@ -432,3 +432,49 @@ seconds and the Codex extension repeatedly failed to watch Git metadata on the n
 repository. Disabling only `openai.chatgpt` made R immediate; assigning it a separate extension
 host with `extensions.experimental.affinity` preserved Codex while making `1 + 1` immediate and
 R completions sub-second. Treat extension-host contention separately from backend execution time.
+
+[LEARN:diagnostics] In Positron, directly sourcing `renv/activate.R` from the project
+`.Rprofile` can make Ark log `Unexpected longjump` with a `tree_sitter_r` backtrace and spin one
+CPU core. The same activation completes normally in a standalone Rscript process, so do not
+misdiagnose it as a missing library or a `renv.lock` lock. Define the ordinary-R activation in
+`.First()` only when `interactive()` is true; Ark does not invoke `.First()`, while `targets`
+callr children do and otherwise re-enter the failing bootstrap. Instead, configure
+`positron.r.kernel.env.R_LIBS_USER` in `.vscode/settings.json` with the project-relative renv
+library path. This starts the Ark kernel with the project packages without running the failing
+bootstrap. A full close and reopen of Positron was required for this setting to take effect;
+`Developer: Reload Window` was insufficient and temporarily prevented Codex from opening.
+Verify a recovered console with `.libPaths()` and `find.package("targets")`; `getOption("renv.project")`
+may legitimately be `NULL` because this is a library-path workaround, not full renv activation.
+
+[LEARN:formatting] Do not require air formatting when the air executable is unavailable in the
+active environment. Report that limitation and run available syntax and targeted checks instead.
+
+## DiD downstream revision — 2026-11-11
+
+The current annual 2011–2023 outcome window supersedes the initial four-year panel for
+this distance-based implementation. Annual risk sets group all included same-year openings.
+Residential eligibility remains distinct from the DiD reference period: the new spec uses
+universal base period g - anticipation - 1, with anticipation = 0 as an explicit initial assumption.
+
+The downstream contract separates prospective first coverage at each risk set's baseline
+address (treat_year) from absorbing assignment in earlier eligible risk sets
+(prior_treat_year). Neither is inferred from the nearest representative station or its date.
+The current status classes map to first (3 treated; 4/5/6 candidate controls) and additional
+(2 treated; 1 candidate controls), with future exposure censoring in both strata. Independent
+L6/L17 overlap flags restrict only controls, preserving the focal treated population.
+
+Spillover analysis is suspended until explicitly reactivated, without an automatic date trigger.
+The spec reserves distance-only and distance-plus-accessibility control filters, requiring
+explicit upstream flags. No-interference is not established by suspending those sensitivities.
+
+Joint person bootstrap code now exists but has not been executed or validated. It repeats each
+sampled person across all years, risk sets and specs, recomputes stratum weights, and suppresses
+intervals if any replicate fails or changes support. It conditions on roster/exposure/outcome
+construction, including the baseline wage threshold; it does not cover spatial dependence.
+Combined is implemented only for full-cohort outcomes. Conditional wages and workplace distance
+remain selected-population contrasts. Common-horizon summaries require explicit cohorts and
+follow-up length, excluding the opening year.
+
+[LEARN:did] Passing outcome-free risk-set files (including their audit artifact) directly to
+att_gt, or using representative-station dates as G, is invalid → build audited membership and
+an annual outcome panel first; retain prospective controls' actual treatment timing.

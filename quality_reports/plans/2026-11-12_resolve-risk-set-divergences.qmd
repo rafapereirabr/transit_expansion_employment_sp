@@ -1,0 +1,31 @@
+---
+title: "Resolver divergências entre risk sets e decisões DiD"
+date: 2026-11-12
+status: DRAFT
+---
+
+## Objetivo
+
+Alinhar código e registros por solicitação do usuário, preservando as edições existentes.
+Não executar R, Air, targets ou análise nesta sessão.
+
+## Decisões em esclarecimento
+
+O código atual usa município de São Paulo, distância planar, suporte de 15 km
+e idade 18–60 em janeiro de g; os registros anteriores indicam RMSP, distância
+geodésica e 22–60 na data de abertura. O risk set agora é anual e pode reunir
+várias datas de abertura. Perguntas enviadas ao usuário antes de mudar essas regras.
+
+## Trabalho independente
+
+Corrigir stations_nyet para anos estritamente posteriores ao focal.
+Inspecionar exclusão precoce por idade e residência no baseline, distinguindo
+histórico familiar observado de elegibilidade territorial no risk set.
+Spillovers continuam suspensos.
+
+## Implementação e verificação
+
+Após escolhas: alinhar assumptions, builder, extração, DAG e documentação.
+Revisar diffs textualmente, sem validação funcional nesta sessão.
+O wrapper de patches falhou na sessão anterior; usar escrita direta delimitada
+seu funcionamento não foi corrigido, sem alterar o helper.

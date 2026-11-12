@@ -1,0 +1,26 @@
+---
+title: Risk-set robustness fixes
+date: 2026-11-11
+---
+
+## Scope
+
+Apply implementation-only fixes to the annual risk-set builder: tolerate empty station
+categories, make joins explicit and checked, remove the obsolete household argument, and replace
+logical abbreviations. This change does not settle the treatment-package or age-reference design.
+
+## Decisions retained
+
+- A control is not assigned a fictitious parent station. Its nearest-station distance remains a
+  descriptive support variable.
+- A future implementation must apply one cohort-level eligibility reference date to every status.
+  The current package needs an explicit decision because annual branches can contain more than one
+  trial-service date; the project's primary specification remains age 22--60 on the package's
+  trial-service date.
+- The 2--4 km spillover handling is paused until 2026-11-16. The current classifications must not
+  be presented as resolving interference or as a spillover-robust control definition.
+
+## Verification
+
+Run air format and parse the edited R source. Do not rebuild restricted-data targets for these
+interface-only changes; the subsequent audit implementation must exercise a representative branch.

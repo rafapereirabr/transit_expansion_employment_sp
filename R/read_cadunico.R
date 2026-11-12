@@ -242,6 +242,7 @@ read_cad_individuals <- function(year, families, cols_individ, save_dir = NULL) 
 			race_cad = co_raca_cor_pessoa,
 			disability_cad = co_deficiencia_memb,
 			literate_cad = co_sabe_ler_escrever_memb,
+			last_updated_cad = dt_atualizacao_fam,
 			h3_09_cad = h3_09,
 			lat_cad = lat,
 			lon_cad = lon #,
@@ -253,11 +254,12 @@ read_cad_individuals <- function(year, families, cols_individ, save_dir = NULL) 
 			# 	in_dormir_albergue_memb +
 			# 	in_dormir_dom_part_memb +
 			# 	in_dormir_outro_memb,
-			# years_update = (as.integer(end_of_year) - as.integer(last_updated_cad)) / 365.25,
+			years_update = (as.integer(end_of_year) - as.integer(last_updated_cad)) / 365.25,
 			.keep = "unused"
 		) |>
 		relocate(year, cpf, .before = everything()) |>
 		relocate(
+			years_update,
 			code_muni_cad,
 			h3_09_cad,
 			id_addr_cad,

@@ -1,0 +1,46 @@
+---
+title: Positron and renv profile startup recovery
+date: 2026-11-11
+---
+
+## Objective
+
+Restore a responsive interactive R console in Positron while preserving automatic activation of
+the project renv library.
+
+## Evidence
+
+- A direct Rscript activation of renv completes in about three seconds.
+- Ark logs an Unexpected longjump while it is sourcing the project .Rprofile, followed by a
+  tree_sitter_r backtrace.
+- Disabling only the profile call that sources renv/activate.R restores a responsive console.
+
+## Planned change
+
+Define .First in .Rprofile and source renv/activate.R from that startup hook for ordinary R
+sessions. Ark does not invoke .First, so configure its kernel environment with R_LIBS_USER pointing
+to the project library. R recognizes this variable during startup, before Ark processes the user
+profile; this avoids the failing renv bootstrap while preserving access to project packages.
+Restrict .First to interactive R so targets callr children do not re-enter the problematic renv
+bootstrap; these children inherit R_LIBS_USER from the Positron kernel.
+
+## Verification
+
+1. Start a clean Rscript process and verify that R_LIBS_USER places the project library first.
+2. Restart R in Positron and confirm that the prompt becomes ready without sustained Ark CPU use.
+3. Confirm that a package available through the project library can load before treating the
+   workaround as stable. Restore missing lockfile packages separately if needed.
+
+## Result
+
+The Positron console restarted without sustained Ark CPU use after a full close and reopen.
+Its library path included the project renv library, and `find.package("targets")` resolved there.
+Reloading the window alone did not apply the kernel environment setting.
+The initial version of `.First()` still ran in noninteractive targets callr children and reproduced
+the renv startup loop. Restricting it with `interactive()` allowed `tar_outdated()` to start and
+surface the next pipeline-definition error instead.
+
+## Rollback
+
+Restore the direct source call in .Rprofile if the console fails to start or the project library
+is not activated.

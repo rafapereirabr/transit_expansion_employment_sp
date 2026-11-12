@@ -138,6 +138,33 @@ O primeiro ponto a resolver é a classificação anual de todos os eventos do me
 ela, qualquer diagnóstico posterior usa um grupo de controle contaminado. Depois, a prioridade é
 materializar `G_i` no nível pessoa antes de discutir o estimador.
 
+## Decisão de execução do `att_gt`
+
+Para cada risk set focal `g`, a população, a elegibilidade e o endereço permanecem fixados no
+baseline `g - 4`. Nesse mesmo arquivo, `treat_year` deve ser prospectivo: para cada membro,
+registrar o primeiro ano de cobertura por uma abertura incluída que ocorra em `g` ou depois,
+avaliada no endereço de baseline daquele risk set. Pessoas com cobertura em anos posteriores
+recebem, por exemplo, `G_i = 2019` no risk set focal de 2018; isso não as transforma em membros
+da população focal de 2019, que terá seu próprio baseline em 2015.
+
+Passar esse `G_i` ao `did::att_gt(control_group = 'notyettreated')` permite que a pessoa seja
+controle antes de sua primeira cobertura e seja retirada automaticamente do grupo de controle em
+`t >= G_i`. O estimador também calculará ATT para coortes futuras presentes nesse arquivo. Esses
+ATT são auxiliares para a classificação temporal do controle e não serão reportados: a extração
+manterá somente `ATT(g, t)` da coorte focal. Não recodificar futuros tratados como nunca tratados.
+
+Antes da estimação definitiva, executar um benchmark em um risk set representativo:
+
+1. desenvolvimento e auditoria com `bstrap = FALSE` e `cband = FALSE`;
+2. registrar tempo e memória da estimação DR sem bootstrap, incluindo as coortes auxiliares;
+3. comparar com a configuração de inferência escolhida;
+4. para resultados reportados, usar inferência conjunta no nível da pessoa, que também cubra a
+   agregação `combined` entre os estratos `first` e `additional`.
+
+O valor padrão atual do helper `run_att_gt()` é `bstrap = TRUE` e `cband = TRUE`; a etapa de
+desenvolvimento precisa passá-los explicitamente como `FALSE`, e não pressupor que já estejam
+desligados.
+
 ## Decisões a confirmar antes de programar
 
 1. O trimestre continuará como chave de pacote (`event_id`) ou será apenas uma coluna de rótulo?

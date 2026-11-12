@@ -1,4 +1,8 @@
-source("renv/activate.R")
+if (interactive()) {
+  .First <- function() {
+    source("renv/activate.R")
+  }
+}
 # rJavaEnv begin: Manage JAVA_HOME
 Sys.setenv(JAVA_HOME = 'C:/Users/B13943152600/AppData/Local/R/cache/R/rJavaEnv/installed/windows/x64/21') # rJavaEnv
 old_path <- Sys.getenv('PATH') # rJavaEnv
