@@ -32,14 +32,22 @@ prepare_did_sample <- function(data, spec) {
 		did_suspend("missing_annual_reference_or_opening")
 	}
 	control_flags <- stats::na.omit(c(spec$control_flag, spec$spillover_flag))
+	if (spec$comparison == "status_5") {
+		if (!"status_num" %in% names(data)) did_suspend("missing_status_num")
+		if (anyNA(data$status_num)) did_suspend("unknown_status_num")
+	}
 	if (length(setdiff(control_flags, names(data)))) did_suspend("missing_control_flags")
-	fixed <- unique(c("treat_year", "base_service", covariates, control_flags))
+	fixed <- unique(c("treat_year", "base_service", covariates, control_flags,
+		if (spec$comparison == "status_5") "status_num"))
 	for (column in fixed) {
 		if (any(tapply(data[[column]], data$person_id, function(x) length(unique(x))) != 1L)) {
 			did_suspend("time_varying_baseline_attribute")
 		}
 	}
 	keep <- data$base_service == spec$treat_type
+	if (spec$comparison == "status_5") {
+		keep <- keep & (data$treat_year == g | data$status_num == 5L)
+	}
 	for (flag in control_flags) {
 		if (anyNA(data[[flag]]) || !all(data[[flag]] %in% c(TRUE, FALSE))) {
 			did_suspend("unknown_control_eligibility")
@@ -84,6 +92,17 @@ prepare_did_sample <- function(data, spec) {
 	n_controls <- length(unique(data$person_id[data$treat_year == 0 | data$treat_year > g]))
 	if (!n_treated) did_suspend("no_observed_focal_outcomes")
 	if (!n_controls) did_suspend("no_eligible_controls")
+	# H3-7 pairs inference cannot be identified from a one-cell arm.
+	if (!"h3_7_baseline" %in% names(data) || anyNA(data$h3_7_baseline)) {
+		did_suspend("missing_h3_7_baseline")
+	}
+	cluster_units <- data[!duplicated(data$person_id), , drop = FALSE]
+	if (length(unique(cluster_units$h3_7_baseline[cluster_units$treat_year == g])) < 2L ||
+		length(unique(cluster_units$h3_7_baseline[
+			cluster_units$treat_year == 0 | cluster_units$treat_year > g
+		])) < 2L) {
+		did_suspend("insufficient_h3_7_cluster_support")
+	}
 	support <- lapply(years, function(y) {
 		# Not-yet-treated controls must be untreated at both the outcome and reference.
 		cutoff <- max(y, reference) + spec$anticipation

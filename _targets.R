@@ -481,7 +481,7 @@ list(
 	),
 	tar_target(
 		name = rais_spec,
-		command = make_rais_spec(),
+		command = make_rais_spec(coverage_confirmed_years = time_window),
 		format = "rds"
 	),
 	tar_target(
@@ -493,19 +493,19 @@ list(
 	),
 	tar_target(
 		name = rais_records,
-		command = rais_files[["records"]],
+		command = rais_artifact(rais_files, "records"),
 		pattern = map(rais_files),
 		format = "file"
 	),
 	tar_target(
 		name = rais_person_year,
-		command = rais_files[["person_year"]],
+		command = rais_artifact(rais_files, "person_year"),
 		pattern = map(rais_files),
 		format = "file"
 	),
 	tar_target(
 		name = rais_audits,
-		command = rais_files[c("link_audit", "person_audit", "manifest")],
+		command = rais_artifact(rais_files, c("link_audit", "person_audit", "manifest")),
 		pattern = map(rais_files),
 		format = "file"
 	),
@@ -518,50 +518,115 @@ list(
 	),
 	tar_target(
 		name = rais_workplaces,
-		command = rais_workplace_files[["records"]],
+		command = rais_artifact(rais_workplace_files, "workplaces"),
 		pattern = map(rais_workplace_files),
 		format = "file"
 	),
 	tar_target(
 		name = rais_workplace_audits,
-		command = rais_workplace_files[["audit"]],
+		command = rais_artifact(rais_workplace_files, c("workplace_audit", "workplace_lookup_audit")),
 		pattern = map(rais_workplace_files),
 		format = "file"
 	),
 
+	## integrated audit review -----------------------------------------------------------------
+	tar_target(
+		name = labor_audit_review,
+		command = build_labor_audit_review(
+			rais_files = rais_files,
+			workplace_files = rais_workplace_files,
+			risk_sets = risk_sets,
+			person_files = person_files,
+			source_years = time_window,
+			baseline_years = risk_set_years,
+			g_lag = treat_assumptions$g_lag,
+			save_dir = restricted_dir
+		),
+		format = "file",
+		deployment = "main"
+	),
+
+	## employment pilot input audit -------------------------------------------------------------
+	tar_target(
+		name = employment_pilot_input_audit,
+		command = audit_employment_pilot_inputs(
+			risk_sets = risk_sets,
+			g_lag = treat_assumptions$g_lag,
+			save_dir = restricted_dir
+		),
+		format = "file",
+		deployment = "main"
+	),
+	## provisional outcome-free exposure --------------------------------------------------------
+	tar_target(
+		name = did_exposure_provisional,
+		command = build_provisional_exposure(risk_sets, treat_assumptions$g_lag, restricted_dir),
+		format = "file",
+		deployment = "main"
+	),
+	tar_target(
+		name = did_exposure_provisional_audit,
+		command = audit_provisional_exposure(did_exposure_provisional, restricted_dir),
+		format = "file",
+		deployment = "main"
+	),
+	## employment-only membership and annual panel ---------------------------------------------
+	tar_target(
+		name = did_membership_employment,
+		command = build_employment_memberships(
+			risk_sets, did_exposure_provisional, treat_assumptions$g_lag, restricted_dir
+		),
+		format = "file",
+		deployment = "main"
+	),
+	tar_target(
+		name = did_panel_employment,
+		command = build_employment_panels(
+			did_membership_employment, rais_person_year, time_window, restricted_dir
+		),
+		format = "file",
+		deployment = "main"
+	),
+	tar_target(
+		name = did_panel_employment_audit,
+		command = audit_employment_panels(did_panel_employment, restricted_dir),
+		format = "file",
+		deployment = "main"
+	),
+	tar_target(
+		name = did_membership_employment_audit,
+		command = audit_employment_memberships(did_membership_employment, restricted_dir),
+		format = "file",
+		deployment = "main"
+	),
 	## estimation ------------------------------------------------------------------------------
 	tar_target(
 		name = did_spec,
-		command = make_did_spec(spillover = "none"),
+		command = make_did_spec(spillover = "none", missing_covariates = "complete_case") |>
+			dplyr::filter(outcome == "celetista_31dec", treat_type == "first"),
 		format = "rds"
 	),
 	tar_target(
 		name = did_inference,
 		command = make_did_inference(biters = 999L, seed = 20261111L),
 		format = "rds"
+	),
+	# Branch over declared cohort years; the multi-file panel target is shared input.
+	tar_target(
+		name = did_pilot_years,
+		command = sort(unique(risk_set_years + treat_assumptions$g_lag)),
+		iteration = "vector",
+		format = "rds"
+	),
+	tar_target(
+		name = did_point_employment,
+		command = estimate_did_grid(
+			select_employment_panel(did_panel_employment, did_pilot_years), did_spec
+		),
+		pattern = map(did_pilot_years),
+		format = "rds",
+		deployment = "main"
 	)
-	# Dormant until audited membership and annual outcomes exist. risk_sets contains
-	# baseline records + an audit file, not an outcome panel: never pass it to att_gt.
-	# membership must resolve prospective G at the fixed baseline address, prior
-	# absorbing assignment, baseline-service strata and independent L6/L17 flags.
-	# tar_target(
-	# 	name = did_panel,
-	# 	command = build_did_panel(did_membership, did_outcomes, time_window),
-	# 	format = "rds"
-	# ),
-	# tar_target(
-	# 	name = did_point,
-	# 	command = estimate_did_grid(did_panel, did_spec),
-	# 	format = "rds"
-	# ),
-	# Joint inference must consume all risk sets together, not independent branches.
-	# Specify cohorts + horizon in BOTH calls before reporting a full-year average.
-	# tar_target(
-	# 	name = did_joint,
-	# 	command = bootstrap_did(did_panel, did_spec, did_inference),
-	# 	format = "rds"
-	# ),
-
 	## routing ---------------------------------------------------------------------------------
 	# tar_target(
 	# 	name = od_households_stations,

@@ -1,0 +1,27 @@
+﻿---
+title: "Slides do piloto de emprego"
+date: 2026-11-13
+---
+
+## Escopo
+
+Criar apresentação PPTX em `docs/` a partir de `slides_sp_20261013.pptx` e `instrucao slides.txt`, preservando o estilo. Cobrir painel/bases, estratégia/outcomes, grupos de tratamento/controle e reservar cinco slides de resultados sem estimativas. O piloto é apenas emprego formal em 31/12, primeiro tratamento; timing e inferência ainda provisórios.
+
+## Implementação e verificação
+
+Inspecionar o PPTX como pacote OOXML, substituir conteúdo antigo, remover resultados e imagens que possam induzir interpretação errada. Validar integridade ZIP, textos finais e ausência de resultados herdados. Não acessar microdados nem executar o target R em andamento.
+
+## Correção após revisão do usuário
+
+A primeira versão falhou na abertura e embaralhou o texto. A apresentação foi reconstruída em inglês, diretamente a partir do pacote PPTX original, com parágrafos separados e fontes explícitas. Validação: nove slides XML legíveis, 80 entradas (mesmo número do template), sem textos de resultados preliminares antigos. Abertura visual não foi possível porque PowerPoint/LibreOffice não estão disponíveis neste ambiente.
+
+
+## Fonte Quarto
+
+Após o usuário confirmar que pode renderizar em outro computador, foi criada uma fonte Reveal.js em docs/slides_emprego_piloto.qmd com CSS local. São dez slides em inglês: capa, painel, estratégia, outcome, mapa reservado e cinco resultados reservados. O HTML deve ser renderizado no computador com Quarto; embed-resources: true produz um arquivo distribuível. Não houve renderização local porque o executável Quarto não está instalado neste ambiente.
+
+
+## Renderização local
+
+O Quarto 1.9.38 incluído no RStudio foi localizado e executado. A fonte QMD foi salva em UTF-8 sem BOM para que o front matter fosse reconhecido. A renderização gerou docs/slides_emprego_piloto.html com recursos embutidos. Verificações: dez seções, cinco espaços de resultados, um espaço de mapa, sem dependências _files/; capa e slide de painel inspecionados via Chrome headless, sem sobreposição visível. Resultados e mapa seguem pendentes.
+

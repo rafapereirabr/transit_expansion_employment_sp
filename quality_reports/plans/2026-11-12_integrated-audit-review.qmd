@@ -1,0 +1,17 @@
+---
+title: Integrated post-build audits
+date: 2026-11-12
+status: COMPLETED
+---
+
+Read only tracked aggregate audits and metadata after the user's build through
+rais_workplaces. Reconcile roster/person/link totals, retention funnels, geocoding
+cardinality and quality; identify salary-unit and source-coverage gates before DiD.
+Do not open individual RAIS/CadUnico records or classify effects causally.
+
+Add reusable audit-summary/report helpers under R and explicit targets depending only
+on audit artifacts. Keep detailed output in restricted storage, outside versioned reports.
+Use the DAG as the sole canonical report workflow; temporary diagnostics are removed.
+Verify schemas, annual completeness, arithmetic invariants and narrow report targets.
+Do not run extraction, routing, outcomes or estimation. Report missing audit capabilities
+rather than infer person-level coverage from job/establishment-level counts.

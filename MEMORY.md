@@ -660,3 +660,220 @@ Spatial draws are shared across strata/models within each focal cohort, covering
 stratum weights. No cross-cohort covariance/bands or cross-cohort average is produced;
 repeated people can have different baseline cells across risk sets and require additional
 joint inference for such contrasts. Do not treat separate trajectories as independent.
+
+## Line 15 local analysis — approved 2026-11-12
+
+Add a separate analysis with focal treated people exposed to openings of Line 15-Prata
+only, using local controls whose baseline residence is within 8 km planar distance of
+the full corridor. Keep the existing 2 km station-based exposure definition, baseline
+eligibility, first/additional strata and other temporal exclusions. This is a separate
+population/comparison, not a relabeling of the metropolitan analysis.
+
+The corridor geometry must be fixed explicitly and independently of outcomes; the
+proposed reference is the full corridor operating by 2023. Other-line exposure, including
+same-year openings and overlap with focal L15 coverage, must be recorded separately.
+Same-year other-line treated people cannot become controls for the L15 contrast; the
+handling of overlapping L15/other-line exposure requires an explicit rule before fitting.
+
+Catalog L15 opening cohorts in the current study window are 2018, 2019 and 2021.
+With five outcomes, two service strata, two adjustment versions and anticipation 0,
+one local comparison adds up to 60 fit attempts to the existing 160, totaling 220.
+This is before support-related suspensions and bootstrap re-estimation. Inference
+and estimation inputs for this local analysis have not yet been implemented or run.
+
+## Prior-station donut eligibility — corrected 2026-11-12
+
+The user clarified direct-coverage precedence: use distance from baseline residence
+to the NEAREST station opened before focal year g. The donut is (2, 4] km for that
+nearest-prior distance; it is not membership in the ring of any individual prior station.
+If legacy service is within 2 km, preserve the existing baseline-service classification,
+including eligible additional treated and old-service controls. A more distant station
+at 3 km does not override this direct coverage. Existing drop_me rules for openings in
+2011 through g - 1 within 2 km still apply, regardless of legacy-service proximity.
+
+If the nearest-prior distance is in (2, 4], exclude from BOTH treated and control
+samples under the donut specification; focal new treatment alone does not exempt the
+unit. An excluded treated person is never recoded as a control. The nearest-prior
+distance must be computed over the union of relevant pre-g station categories, not
+taken from an arbitrary representative station. Unknown remains distinct from zero.
+
+[LEARN:spillover] Interpreting the donut as any-station ring membership was too
+restrictive and contradicted direct-coverage precedence. Use the nearest relevant
+prior station to define the donut while retaining the independent historical exclusions.
+Spillover activation remains deferred under the user's latest instruction; no filters
+or upstream functions were changed while correcting this record.
+
+## Alternative controls and timing lookup — clarified 2026-11-12
+
+User specifies the alternative comparison literally as status_num == 5 controls.
+This supersedes the proposed independent corridor-overlap control population: do not
+silently include status 1 or 4 merely because an address is also near a planned corridor.
+Current classification places baseline old-service controls in status 1, so status 5
+provides no additional-stratum controls under the maintained within-baseline-service
+comparison. Suspend unsupported additional/alternative models; using group 5 for that
+stratum would require an explicit change in comparison assumptions, not automatic fallback.
+The spec/sample contract and model-count audit still need to incorporate this clarification.
+
+prior_treat_year can be derived as one earliest prior person-level assignment across
+eligible risk sets, not one column per historical cohort. This historical assignment
+is different from prospective coverage at a fixed baseline address. Cross-risk-set
+person labels alone cannot recover the latter when baseline residence or eligibility
+changes. Reuse an address x opening-year exposure lookup across snapshots, then derive
+the earliest covered future year separately for each focal risk set's baseline address.
+
+## Provisional timing approximation — authorized 2026-11-12
+
+User explicitly defers exact earliest-opening coverage at each focal baseline address
+so a very preliminary model can proceed with the available timing information.
+Label this timing as provisional in specifications and outputs; do not present it as
+validated causal evidence. Focal status 2/3 assigns G = focal g, not the historical
+station date attached to additional. For status 4, a nearest-station trial date may
+provide an approximate future G; another station within 2 km may have opened earlier,
+so this can retain exposed controls too long. Missing/unusable dates remain unknown,
+not automatically never treated. Cross-risk-set prior person assignment is a separate
+operation and does not fix address-specific prospective timing when residence changes.
+The exact address x opening-year lookup remains required after this exploratory round.
+This approval relaxes the timing requirement only; source coverage, outcome validity,
+missing covariate decisions and other unresolved contracts are not waived.
+
+[LEARN:targets] Named indexing of a multi-file target failed after dynamic branching:
+rais_records_37527d9a4ccfa412 evaluated rais_files[["records"]], but the saved upstream
+file-path vector had length five and names NULL. Select each RAIS/workplace artifact
+by its documented basename using rais_artifact(), checking exactly one match, rather
+than relying on vector names or order. All five saved 2012 files existed in the diagnostic.
+The original error was reproduced and the selector passed path-only tests; no source
+records were read or annual extraction rerun. Parse and diff checks passed; Air unavailable.
+
+[LEARN:rais-geocoding] The 2023 geocoder expanded establishment keys with identical
+projected geocode rows, not conflicting coordinates. Deduplicate exact geocode rows
+before checking key uniqueness; retain a hard failure for distinct records per key.
+get_work_location now writes a separate lookup-cardinality audit tracking removed
+repetitions. Synthetic duplicate/conflict/empty tests and the in-memory 2023 lookup
+cardinality check passed. No RAIS link extraction or tar_make was rerun by the agent.
+
+## Aggregate post-build audit review - 2026-11-12
+
+The integrated labor_audit_review target reads only tracked aggregate audit artifacts.
+Select current dynamic-parent children; stale/orphan branches and old audit files must
+not be pooled into a current-build diagnosis. Person, link and establishment rates
+have different denominators and must not be interpreted interchangeably.
+Current saved annual audits reconcile technically, but source_coverage_confirmed is
+still false: extraction completion alone does not authorize coding unmatched people
+as non-employed. Salary type is present and includes non-monthly units; positive
+salary/hours alone does not establish a valid hourly wage. Workplace quality shows
+an annual discontinuity driven mainly by invalid deviation, requiring investigation
+before interpreting distance outcomes. These are measurement findings, not effects.
+The report was built from saved snapshots using shortcut=TRUE to avoid rebuilding
+stale dependencies; this does not certify source/code freshness. Detailed tables
+remain in restricted output storage, outside versioned reports.
+## Active pilot scope at chat handoff - 2026-11-12
+
+User narrows the immediate preliminary DiD to y = celetista_31dec (employment).
+Prioritize annual RAIS source-coverage validation and baseline-covariate/support audits.
+Workplace-quality investigation is explicitly deferred; it is not a gate for this
+employment-only pilot. Wage normalization and complete/available-link comparisons
+remain pending for the subsequent wage outcomes, not prerequisites for employment.
+Do not infer employment from successful workplace geocoding or valid wages/hours.
+## RAIS annual source coverage confirmed - 2026-11-12
+
+The project owner explicitly confirms that `ipeadatalake::ler_rais(year, "vinc")`
+queried the complete intended annual link source for every year 2011–2023, without
+missing files, partitions or regions. This confirmation covers the source universe;
+it does not assert that RAIS captures undeclared employment. The DAG now passes
+`time_window` to `coverage_confirmed_years` in `make_rais_spec()`. For a valid roster
+CPF-year, observed active celetista remains 1, uncertain eligible links remain NA,
+and absence of a qualifying link in a confirmed year becomes 0. Saved extraction
+artifacts created before this configuration change still carry the old coverage flag
+and must be rebuilt before their zeros or aggregate reports are used.
+
+## Employment pilot baseline audit and model policy - 2026-11-12
+
+The outcome-free input audit completed for focal cohorts 2017, 2018, 2019 and 2021.
+Baseline age, sex and H3-7 were observed in all retained risk-set records; race
+was missing for a material minority, while literacy was rarely missing. The project
+owner selected complete-case handling for the baseline-adjusted model. The
+unadjusted model retains its full otherwise eligible sample. The 2019 additional
+focal group occupies only one H3-7 cell, so it lacks minimum spatial-cluster
+support under the preliminary H3-7 design. The code now suspends a fit before
+estimation if either fitted arm has fewer than two H3-7 cells. Other cohort/stratum
+cluster concentration remains a diagnostic, not proof of spatial independence.
+
+The alternative comparison is now named status_5 in the preliminary spec and
+selects controls literally from status_num == 5. No additional-stratum status_5
+controls were present in the audited baseline risk sets; that model must suspend.
+The active did_spec target is limited to celetista_31dec and uses complete_case
+for adjusted covariates. Neither membership, outcome panel nor DiD estimation was
+run in this session. The saved labor_audit_review still reports zero of 13 annual
+sources coverage-confirmed; it predates the configuration change and cannot
+validate employment zeros until RAIS artifacts and review are refreshed.
+[LEARN:targets] A newly declared target cannot be bootstrapped with
+`shortcut = TRUE` when it has no metadata record. The first
+`did_exposure_provisional_audit` attempt failed for that reason; use
+`shortcut = FALSE` for its initial build, after checking stale dependencies.
+The warning about interactive globals named opening_events and rais_audits did
+not cause this failure.
+## Provisional exposure audit - 2026-11-12
+
+The first build of did_exposure_provisional_audit completed for 2017, 2018,
+2019 and 2021. The only prospective-unknown basis in this audit is status 1:
+old service with unresolved future additional coverage. It represents 930,814
+risk-set rows across cohorts, of which 930,306 have no earlier eligible focal
+assignment. Excluding these rows from the provisional membership removes the
+available additional-service controls; additional-stratum DiD models must
+suspend rather than substitute another comparison population. Focal statuses
+2/3 have explicit g; status 4 uses the nearest future-station date provisionally.
+The audit records 1,790 rows with an earlier eligible focal assignment across
+all bases. Counts are risk-set rows, not distinct people across cohorts. No
+DiD model was estimated from this audit.
+## First-treatment-only employment pilot - 2026-11-12
+
+After reviewing the provisional exposure audit, the user directs the initial
+employment DiD to first treatment only. The active did_spec target now filters
+treat_type == "first" and celetista_31dec; the annual employment panel also
+retains only the first-service stratum after removing prior assignments.
+Historical focal assignments from both first and additional risk sets still
+inform prior_treat_year, so people previously treated are not reintroduced.
+The outcome-free exposure and membership audits may continue to describe both
+strata; additional-treatment estimation remains deferred until its controls'
+future coverage is resolved. No DiD model has been run.
+## First-treatment membership support - 2026-11-12
+
+The first build of did_membership_employment_audit completed. Across the four
+focal cohorts, the provisional first-service sample retains status 3 focal
+treated members and status 4/5/6 comparison candidates after removing earlier
+eligible focal assignments. First-service treated H3-7 support is 3, 19, 9 and
+14 cells in 2017, 2018, 2019 and 2021, respectively; comparison candidates
+cover 234, 232, 228 and 231 cells. The 2017 treated group is concentrated:
+its largest H3-7 cell holds about 72% of treated members. These are baseline
+support diagnostics, not proof of valid spatial independence or final model
+support after annual outcome and complete-case restrictions. The RAIS manifest
+files for all 13 years were regenerated after coverage configuration changed;
+source flags still require checking in the employment panel build.
+## First-treatment employment panel audit - 2026-11-13
+
+The user built did_panel_employment_audit after the RAIS rebuild. Four restricted
+first-service Parquet panels exist for focal cohorts 2017, 2018, 2019 and 2021.
+Each has exactly 13 annual outcome years (2011–2023) and a constant person count
+across those years: 446,620; 472,656; 397,217; and 494,826 membership rows,
+respectively. The aggregate audit reports only employed and not_employed outcome
+classes, with zero unknown celetista_31dec person-years. The panel builder also
+checked CPF-year uniqueness, full annual joins and true source-coverage flags
+before writing. These are structural/outcome-coverage checks; no DiD fit or
+causal result has been evaluated. Baseline first-service treated H3-7 support
+and the concentrated 2017 treated cells remain relevant for inference.
+[LEARN:did-spec] The first did_point_employment attempt failed while building
+did_spec, before any fit: switch(spillover, ...) inside dplyr::mutate saw the
+new spillover column as a vector, although switch requires one value. Use
+vectorized case_when for the spillover_flag mapping. The interactive globals
+warning about opening_events/rais_audits was unrelated. Code parsing and
+git diff --check passed after the fix; the target has not yet been rerun.
+[LEARN:targets] A static multi-file target is not a valid map() axis. The
+first did_point_employment pattern tried to branch over did_panel_employment,
+which returns four file paths but is not itself patterned; targets rejected the
+pipeline before fitting. Declare did_pilot_years as an explicit vector-iteration
+target, branch over that target, and select the matching static panel file by
+its contracted basename inside each branch. Path-selector synthetic checks,
+R parse and git diff --check passed; the target graph still requires a user-run
+verification. No DiD fit occurred in the failed attempt.
+[LEARN:slides] Inserir todo o conteúdo em um único run de texto do template e repacotar o PPTX por extração → manter o pacote original e substituir apenas os XMLs dos slides, com parágrafos e tamanhos de fonte explícitos; validar os textos e a estrutura ZIP antes de entregar.
+

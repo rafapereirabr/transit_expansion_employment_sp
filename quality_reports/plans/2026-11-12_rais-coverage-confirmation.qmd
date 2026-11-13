@@ -1,0 +1,11 @@
+---
+title: Confirm annual RAIS coverage for employment pilot
+date: 2026-11-12
+status: COMPLETED
+---
+
+The project owner explicitly confirms that `ipeadatalake::ler_rais(year, "vinc")` queried the complete intended annual RAIS link source, without missing files, partitions or regions, for each year 2011–2023. This is source-universe evidence, distinct from successful extraction of the CPF roster and from the intrinsic reporting limits of RAIS.
+
+Set `coverage_confirmed_years` explicitly to the pipeline's `time_window`. Preserve the existing precedence: observed active celetista = 1; uncertain eligible links = NA; confirmed no qualifying link = 0. Record the confirmation and its scope in MEMORY and clear the coverage item in BACKLOG. Verify syntax and the existing classification precedence. Inspect target freshness before rerunning any annual extraction; do not run workplace or DiD work for this change.
+
+Verification: R parse passed for _targets.R and R/read_rais.R; git diff --check passed. The local Rscript environment lacks ipeadatalake and Air is unavailable, so no tar_make or annual re-extraction was run. The changed rais_spec makes rais_files and downstream person-year/audit artifacts stale; rebuild before using coded zeros.

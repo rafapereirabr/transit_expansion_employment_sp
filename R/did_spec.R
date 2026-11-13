@@ -1,13 +1,13 @@
 # Preliminary model grid; missing-data policy remains pending until its audit.
 make_did_spec <- function(
-	comparisons = c("main", "l6_l17"),
+	comparisons = c("main", "status_5"),
 	spillover = "none",
 	anticipation = 0L,
 	xformla = NULL,
 	missing_covariates = "audit_pending"
 ) {
 	stopifnot(
-		length(comparisons) > 0L, all(comparisons %in% c("main", "l6_l17", "corridors")),
+		length(comparisons) > 0L, all(comparisons %in% c("main", "status_5", "corridors")),
 		length(spillover) == 1L,
 		spillover %in% c("none", "exclude_2_4km", "exclude_2_4km_and_gain"),
 		length(anticipation) > 0L, all(is.finite(anticipation)),
@@ -38,14 +38,13 @@ make_did_spec <- function(
 	) |>
 		dplyr::mutate(
 			spillover = spillover,
-			spillover_flag = switch(
-				spillover,
-				none = NA_character_,
-				exclude_2_4km = "control_outside_2_4km",
-				exclude_2_4km_and_gain = "control_outside_2_4km_low_gain"
+			spillover_flag = dplyr::case_when(
+				spillover == "none" ~ NA_character_,
+				spillover == "exclude_2_4km" ~ "control_outside_2_4km",
+				spillover == "exclude_2_4km_and_gain" ~ "control_outside_2_4km_low_gain"
 			),
 			control_flag = dplyr::case_when(
-				comparison == "l6_l17" ~ "elig_l6_l17",
+				comparison == "status_5" ~ NA_character_,
 				comparison == "corridors" ~ "elig_corridors",
 				TRUE ~ NA_character_
 			),
@@ -97,7 +96,7 @@ as_did_spec <- function(spec) {
 	if (nrow(spec) != 1L) stop("Supply exactly one DiD specification row.")
 	stopifnot(
 		spec$treat_type %in% c("first", "additional"),
-		spec$comparison %in% c("main", "l6_l17", "corridors"),
+		spec$comparison %in% c("main", "status_5", "corridors"),
 		spec$spillover %in% c("none", "exclude_2_4km", "exclude_2_4km_and_gain"),
 		isTRUE(spec$unbalanced),
 		spec$base_period %in% c("universal", "varying"),
@@ -110,7 +109,7 @@ as_did_spec <- function(spec) {
 	if (spec$spillover != "none" && is.na(spec$spillover_flag)) {
 		stop("Activated spillover specification requires an explicit control flag.")
 	}
-	if (spec$comparison != "main" && is.na(spec$control_flag)) {
+	if (spec$comparison == "corridors" && is.na(spec$control_flag)) {
 		stop("Restricted comparison requires an independent baseline control flag.")
 	}
 	return(spec)

@@ -1,0 +1,12 @@
+---
+title: RAIS file artifact selection after dynamic branching
+date: 2026-11-12
+status: COMPLETED
+---
+
+Fix the failed rais_records branch within the previously authorized RAIS implementation.
+The saved branch command indexes records by name, but upstream file metadata stores
+only paths. Select exactly one artifact by its documented basename, without depending
+on vector names or order. Update all RAIS/workplace extraction selectors. Test only
+saved path metadata and synthetic path vectors, never re-extract restricted data.
+Preserve existing data files and target cache. Record verification and scoped restart.

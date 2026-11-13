@@ -331,3 +331,100 @@ Current incident recovered and console responsiveness confirmed by the user. Evi
   cross-cohort comparison or global confidence band. No such contrasts in first output.
 - [ ] Keep Varginha/corridor expansion deferred while proceeding with current upstream build,
   per the latest user instruction. Upstream build success has not been verified by the agent.
+
+## Line 15 local DiD — approved 2026-11-12
+
+- [ ] Add a distinct L15-local spec and membership: focal L15 openings only, baseline
+  controls within 8 km of the fixed whole-corridor geometry; preserve 2 km treatment,
+  municipal eligibility and temporal exclusions. Do not change the active upstream build.
+- [ ] Build independent local-support, focal-line and other-line exposure flags; audit
+  same-year other-line treatment and resolve mixed L15/other-line exposure before fitting.
+- [ ] Confirm corridor geometry reference (proposed operating network through 2023),
+  inspect local first/additional support and clusters, then estimate L15 cohorts 2018/2019/2021.
+- [ ] Account for grid size in scheduling: 160 existing plus up to 60 L15-local fits,
+  before bootstrap and support-related suspensions. Run priority remains to be approved.
+
+- [ ] On explicit reactivation, implement the (2, 4] km donut using NEAREST-prior
+  station distance at baseline. Preserve direct legacy coverage <=2 km and additional,
+  retain independent drop_me exclusions, and apply donut eligibility to both groups.
+  Do not use any-station ring membership or an arbitrary representative-station distance.
+  Distinguish unknown exposure from zero. Activation remains deferred.
+
+- [ ] Replace the alternative comparison's independent-corridor-overlap sample with
+  literal status_num == 5 controls, as clarified by the user (2026-11-12). Preserve
+  baseline-service restrictions and suspend unsupported additional fits; revise counts.
+- [ ] Build reusable address x opening-year coverage and derive prospective G at each
+  focal baseline address; derive earliest prior person assignment separately by crossing
+  eligible risk sets. Do not infer address-specific future G solely from person labels.
+
+- [ ] Permit an explicitly labelled provisional timing mode for the first exploratory
+  model, per user approval. Use focal g for status 2/3 and available future-station dates
+  only where interpretable; do not use old additional-service dates as focal G or turn
+  unknown timing into zero. Correct earliest address-specific coverage after this round
+  and compare assignments/results. Exact timing correction is no longer a prerequisite
+  for this explicitly provisional pilot; other validity/coverage requirements remain.
+
+- [ ] Resume the scoped user-run build through rais_workplaces after the file-selector
+  correction (2026-11-12). Path-only checks passed; no tar_make was run by the agent.
+  Completed annual extraction artifacts should be reused where targets considers them current.
+
+- [ ] Resume user-run rais_workplaces after exact-geocode deduplication (2026-11-12).
+  Synthetic tests and 2023 lookup cardinality passed; check new lookup audits and
+  distinguish future distinct-location conflicts from harmless exact repetitions.
+
+## Post-build measurement gates - 2026-11-12
+
+- [x] Review current saved aggregate RAIS/CadUnico/risk-set/workplace audits and add
+  the canonical labor_audit_review HTML/RDS target. Arithmetic reconciliations pass;
+  saved artifacts reviewed, not a full freshness certification of upstream code.
+- [x] Confirm annual RAIS source coverage for 2011–2023 from the project owner and
+  configure coverage_confirmed_years. This confirmation concerns the annual source
+  universe, not RAIS reporting completeness. Rebuild affected artifacts before using zeros.
+- [ ] Validate salary-unit normalization against tipo_salario; preserve unknown units
+  and audit complete/available-link wages and threshold-classification disagreement.
+- [ ] Investigate the workplace-quality discontinuity, especially invalid deviation
+  in 2022 versus 2023; distinguish source/geocoder differences from sample composition.
+  Add person- and hours-weighted coverage, rather than extrapolating establishment rates.
+- [ ] Add aggregate baseline-covariate missingness and treated/control/status_num/H3-7
+  support audits before choosing the adjusted-sample policy and estimating.
+- [ ] Inspect stale dependencies separately before the next full build. The report-only
+  shortcut deliberately reused saved artifacts without re-extraction or estimation.
+## Next chat: employment-only preliminary DiD - 2026-11-12
+
+User priority supersedes the broad multi-outcome sequencing above.
+
+1. Validate annual RAIS coverage before coding unmatched roster members as employment
+   zeros; review make_rais_spec()/coverage_confirmed_years and the source manifests.
+2. Build aggregate baseline-covariate missingness and treated/control/status_num/H3-7
+   support audits; decide adjusted-sample policy from these diagnostics before fitting.
+3. Check the saved-artifact/code freshness discrepancy and complete/verify the minimal
+   employment person-year panel and sample contracts before activating DiD targets.
+4. Estimate only celetista_31dec initially, preserving agreed timing, comparison and
+   inference limitations. Suspend unsupported models and record the reason.
+
+Deferred: workplace-quality discontinuity (explicit user instruction), distance outcomes,
+and salary-unit/complete-versus-available wage audits. They do not block employment.
+Checkpoint: quality_reports/session_logs/2026-11-12_employment-pilot-handoff.md.
+## Employment pilot input audit - 2026-11-12
+
+- [x] Run and inspect `employment_pilot_input_audit`; the project owner selected
+  complete-case handling for adjusted covariates. Verify the updated model interface
+  after membership and outcomes are available.
+- [ ] Complete and verify provisional exposure membership and annual employment panel
+  before activating estimation; audit unknown future dates and repeated-person prior
+  assignments. Keep the alternative comparison limited to status_num == 5.
+- [x] Run and inspect the provisional exposure, membership and first-only
+  employment panel audits. All 13 annual employment outcomes are observed for
+  the four provisional first-service panels. Fit status and spatial inference
+  remain pending.
+- [ ] Keep the initial employment DiD limited to first treatment per user decision.
+  Revisit additional treatment only after resolving prospective future coverage
+  for old-service status 1 controls and re-auditing its comparison support.
+- [ ] User-run did_point_employment; inspect aggregate model status, support and
+  suspensions for each first-treatment cohort/comparison/adjustment. Only then
+  activate and verify H3-7 cluster inference. Do not report effect estimates
+  before measurement, timing and identification limits are reviewed.
+## Presentation — PowerPoint handoff
+
+- [ ] When the user is on a computer with PowerPoint, rebuild the English employment-pilot deck in the original docs/slides_sp_20261013.pptx template; inspect every slide in PowerPoint. Use the QMD/HTML as content and layout references. Add only a disclosure-cleared aggregate map and reviewed results; do not reuse the failed direct-OOXML PPTX.
+

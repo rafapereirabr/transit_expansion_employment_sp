@@ -13,7 +13,7 @@ collect_did_data <- function(data) {
 
 # membership is outcome-free, one row per CPF and focal cohort:
 # cpf, risk_set_g, baseline_year, base_service, treat_year, prior_treat_year,
-# elig_l6_l17. G is prospective at THIS risk set's fixed baseline address.
+# status_num. G is prospective at THIS risk set's fixed baseline address.
 # prior_treat_year is the absorbing assignment across earlier eligible risk sets
 # (0 if none); it is NOT the opening date of a historical nearby station.
 # The current status_num/id_closest risk files do not yet satisfy this contract.
@@ -22,7 +22,7 @@ build_did_panel <- function(membership, outcomes, outcome_years) {
 	outcomes <- collect_did_data(outcomes)
 	require_did_columns(membership, c(
 		"cpf", "risk_set_g", "baseline_year", "base_service", "treat_year",
-		"prior_treat_year", "elig_l6_l17"
+		"prior_treat_year", "status_num"
 	))
 	require_did_columns(outcomes, c("cpf", "risk_set_g", "year"))
 	if (anyNA(membership$cpf) || anyNA(outcomes$cpf)) stop("Missing person key.")
@@ -84,7 +84,7 @@ build_did_membership <- function(risk_set, exposure, focal_year, baseline_year) 
 	exposure <- collect_did_data(exposure)
 	require_did_columns(risk, c("cpf", "year", "status_num"))
 	require_did_columns(exposure, c(
-		"cpf", "risk_set_g", "treat_year", "prior_treat_year", "elig_l6_l17"
+		"cpf", "risk_set_g", "treat_year", "prior_treat_year"
 	))
 	stopifnot(
 		length(focal_year) == 1L, length(baseline_year) == 1L,
@@ -108,15 +108,15 @@ build_did_membership <- function(risk_set, exposure, focal_year, baseline_year) 
 	membership <- dplyr::left_join(
 		risk, exposure, by = c("cpf", "risk_set_g"), relationship = "one-to-one"
 	)
-	if (anyNA(membership[c("treat_year", "prior_treat_year", "elig_l6_l17")])) {
+	if (anyNA(membership[c("treat_year", "prior_treat_year", "status_num")])) {
 		stop("Every retained member needs audited prospective exposure and prior assignment.")
 	}
 	is_focal <- membership$status_num %in% c(2L, 3L)
 	if (any(is_focal != (membership$treat_year == focal_year))) {
 		stop("Focal status conflicts with the audited first prospective exposure.")
 	}
-	# Status 1 may receive later additional service. Status 5 is not the full L6/L17
-	# overlap indicator, and status 4's nearest station need not be its earliest opening.
+	# Status 1 may receive later additional service; status 4's nearest station
+	# need not be its earliest opening. Status 5 is the literal alternative control.
 	return(membership)
 }
 

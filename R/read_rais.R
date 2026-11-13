@@ -209,6 +209,7 @@ get_work_location <- function(rais_vinc, year, save_dir, spec = make_rais_spec()
 		dplyr::distinct(id_estab, cei_vinc) |>
 		dplyr::compute()
 	n_keys <- rais_count(keys)
+	lookup_counts <- list(n_raw = 0, n_unique = 0, n_exact_duplicates_removed = 0)
 	if (!n_keys) {
 		locations <- keys |>
 			dplyr::mutate(
@@ -224,9 +225,8 @@ get_work_location <- function(rais_vinc, year, save_dir, spec = make_rais_spec()
 				work_desvio = desvio_metros, work_h3_id = h3_09
 			) |>
 			dplyr::compute()
-		if (rais_count(locations) != rais_count(dplyr::distinct(locations, id_estab, cei_vinc))) {
-			stop("Workplace lookup has duplicate establishment keys.")
-		}
+		lookup_counts <- deduplicate_workplace_locations(locations)
+		locations <- lookup_counts$records
 		# Preserve keys when the geocoder omits establishments.
 		locations <- keys |>
 			dplyr::left_join(locations, by = c("id_estab", "cei_vinc")) |>
@@ -256,11 +256,66 @@ get_work_location <- function(rais_vinc, year, save_dir, spec = make_rais_spec()
 	audit <- locations |>
 		dplyr::count(year, work_geo_reason, name = "n_establishments") |>
 		dplyr::collect()
+	lookup_audit <- tibble::tibble(
+		year = as.integer(year), n_requested_keys = n_keys,
+		n_geocoder_rows = lookup_counts$n_raw,
+		n_distinct_geocoder_records = lookup_counts$n_unique,
+		n_exact_duplicates_removed = lookup_counts$n_exact_duplicates_removed,
+		n_output_keys = rais_count(locations)
+	)
 	paths <- c(
 		records = file.path(save_dir, paste0("rais_workplaces_", year, ".parquet")),
-		audit = file.path(save_dir, paste0("rais_workplace_audit_", year, ".parquet"))
+		audit = file.path(save_dir, paste0("rais_workplace_audit_", year, ".parquet")),
+		lookup_audit = file.path(save_dir, paste0("rais_workplace_lookup_audit_", year, ".parquet"))
 	)
 	write_parquet_target(locations, paths[["records"]], overwrite = TRUE)
 	write_parquet_target(audit, paths[["audit"]], overwrite = TRUE)
+	write_parquet_target(lookup_audit, paths[["lookup_audit"]], overwrite = TRUE)
 	return(paths)
+}
+
+# File-target metadata need not retain names on a returned character vector.
+# Select by the artifact contract, independently of vector names or ordering.
+rais_artifact <- function(files, kind) {
+	prefixes <- c(
+		records = "rais_active_",
+		person_year = "rais_person_year_",
+		link_audit = "rais_link_audit_",
+		person_audit = "rais_person_audit_",
+		manifest = "rais_manifest_",
+		workplaces = "rais_workplaces_",
+		workplace_audit = "rais_workplace_audit_",
+		workplace_lookup_audit = "rais_workplace_lookup_audit_"
+	)
+	if (!is.character(files) || !length(kind) || anyNA(kind) ||
+		any(!kind %in% names(prefixes))) stop("Invalid RAIS artifact request.")
+	result <- vapply(kind, function(component) {
+		pattern <- paste0("^", prefixes[[component]], "[0-9]{4}\\.parquet$")
+		matches <- files[!is.na(files) & grepl(pattern, basename(files))]
+		if (length(matches) != 1L) {
+			stop("Expected exactly one RAIS artifact for component: ", component)
+		}
+		return(unname(matches[[1]]))
+	}, character(1))
+	return(unname(result))
+}
+
+# Collapse only identical projected geocodes. Multiple distinct records for a key
+# remain an unresolved source conflict, never an arbitrary first-location choice.
+deduplicate_workplace_locations <- function(locations) {
+	locations <- rais_input(locations)
+	rais_require(locations, c(
+		"id_estab", "cei_vinc", "work_lat", "work_lon", "work_desvio", "work_h3_id"
+	))
+	n_raw <- rais_count(locations)
+	locations <- locations |> dplyr::distinct() |> dplyr::compute()
+	n_unique <- rais_count(locations)
+	n_keys <- rais_count(dplyr::distinct(locations, id_estab, cei_vinc))
+	if (n_unique != n_keys) {
+		stop("Workplace lookup has conflicting location records for establishment keys.")
+	}
+	return(list(
+		records = locations, n_raw = n_raw, n_unique = n_unique,
+		n_exact_duplicates_removed = n_raw - n_unique
+	))
 }

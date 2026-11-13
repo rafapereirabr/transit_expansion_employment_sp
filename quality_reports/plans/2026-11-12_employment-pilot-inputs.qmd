@@ -1,0 +1,80 @@
+---
+title: Employment-only preliminary DiD input and audit preparation
+date: 2026-11-12
+status: IN PROGRESS
+---
+
+Scope: prepare outcome-free provisional membership, annual celetista_31dec panel, baseline missingness/support audits and a narrow target interface. Do not execute DiD. Preserve existing dirty worktree and restricted output locations.
+
+Use current risk-set records as the eligible baseline universe; retain status_num and baseline covariates. Assign focal G = g for status 2/3, provisional future G from the recorded nearest future station for status 4, and 0 for statuses 1/5/6 only when that interpretation is explicit. Derive prior person assignment from earlier eligible risk sets, separately from fixed-address prospective G. Alternative controls are literally status_num == 5. Validate year and key cardinality; suspend unresolved timing instead of coding it 0. Derive H3-7 from baseline coordinates. Assemble the full annual 2011–2023 outcome window by CPF-year from certified RAIS person-year artifacts; do not depend on workplace quality. Save aggregate covariate/status/H3 support audits under restricted_dir. Keep adjustment policy audit_pending until inspected.
+
+Verify parsing and small synthetic examples, then the narrowest available targets. Report any missing runtime packages and targets not executed. Do not run did::att_gt or bootstrap.
+
+Progress: added the outcome-free `employment_pilot_input_audit` target in the DAG. It reads only current risk-set record artifacts and writes restricted aggregate coverage, status, comparison and H3-7 support tables. R parsing passed. Full target execution is unavailable here because the project R packages are absent from this session. Membership and panel construction remain pending; this audit intentionally labels nonfocal rows only as comparison candidates and does not assign prospective G.
+The user completed the audit target. Aggregate inspection found race missingness,
+no missing age/sex/H3-7, no status-5 additional controls, and one H3-7 treated
+cell for the 2019 additional stratum. The user selected complete-case adjustment.
+Updated the spec to employment only, main and literal status-5 comparisons, and
+added a two-cell-per-arm minimum H3-7 gate. Syntax checks passed; runtime model
+verification remains pending. The previous labor audit still has all 13 annual
+coverage flags false, so annual person-years need regeneration before zero coding.
+Added provisional exposure, membership, employment-panel and aggregate panel-audit
+targets. Status 1 future timing is unknown and therefore excluded from provisional
+membership; this likely leaves additional-service fits without controls. Status 4
+uses the nearest future-station year as approved approximation and records that
+basis. The panel requires all annual person-year source-coverage flags true and
+checks CPF-year uniqueness/completeness before writing. Pure timing logic passed a
+synthetic test; R parsing passed. Project packages are unavailable to this agent,
+so target execution and Arrow/H3 integration remain unverified. The user is now
+rebuilding rais_person_year in their R session.
+Added an aggregate membership-support target after unknown-timing and prior-treatment
+exclusions. The planned narrow verification sequence is: finish rais_person_year,
+run did_exposure_provisional_audit, inspect timing loss, run
+did_membership_employment_audit, inspect post-selection support, then run
+did_panel_employment_audit and inspect annual outcome completeness. Estimation
+remains dormant. The source R files parse and the pure timing helper passed
+synthetic normal/edge cases; Arrow and target integration remain unexecuted here.
+Execution correction: the first attempt to run newly declared
+`did_exposure_provisional_audit` with `shortcut = TRUE` failed before building it,
+because `did_exposure_provisional` had no metadata record. The initial build must
+use `shortcut = FALSE`; inspect the outdated dependency scope before that run.
+The interactive global-name warning for opening_events and rais_audits was
+separate from this failure. No exposure audit artifact was produced by the failed
+attempt.
+The user ran did_exposure_provisional_audit with shortcut = FALSE. The
+restricted aggregate shows no other unknown-timing basis beyond old-service
+status 1. Thus the provisional additional-service comparison is unsupported;
+proceed with first-service candidates and keep additional models suspended.
+Next build and inspect did_membership_employment_audit, then the employment
+panel/audit after verifying annual RAIS coverage flags.
+User steering: proceed only with first treatment for the preliminary employment
+DiD. The did_spec target and panel builder now enforce that scope; prior treatment
+history still uses focal assignments in both strata. Membership and exposure
+audits retain the broader diagnostics. Additional-treatment work is deferred.
+The user built did_membership_employment_audit. Aggregate first-service counts
+and cluster support are available for all four cohorts. The minimum two-cell
+H3-7 gate is met at this stage; 2017 treated cells are concentrated. The next
+required build is did_panel_employment_audit, which checks all annual
+person-years and writes only first-service panels. No estimator was run.
+The user completed did_panel_employment_audit on 2026-11-13. All four first-only
+panels cover the full 2011–2023 window with constant person totals and no
+unknown employment outcomes. The builder's annual source-coverage and join
+assertions passed. Estimation remains to be run by the user; enable a point-fit
+target by cohort, inspect suspensions/support, then enable spatial inference.
+Enabled did_point_employment as a dynamic per-cohort target after the four
+employment panels passed structural and outcome-coverage audits. It runs only
+celetista_31dec, first treatment, main and literal status-5 comparisons,
+unadjusted and baseline-adjusted complete-case specifications, anticipation 0.
+The target saves aggregate status, support and focal annual point estimates;
+no spatial intervals are produced yet. The user will execute it and fit
+suspensions must be reviewed before enabling the H3-7 bootstrap. R parse and
+git diff --check passed; no DiD estimator run by the agent.
+First did_point_employment attempt stopped in did_spec before fitting because
+switch() received the vectorized spillover column. Replaced that mapping with
+case_when; parse and diff checks passed. Await user rerun to functionally verify
+the spec and point fits. The global-name warning is separate.
+Second did_point_employment attempt was rejected before fitting because the
+static multi-file did_panel_employment target was used as a map() axis. Added
+an explicit did_pilot_years vector target and selected one panel path per cohort
+inside branches. Syntax and synthetic selector checks pass; graph execution
+remains pending in the user's R environment.

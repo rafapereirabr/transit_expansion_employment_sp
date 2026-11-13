@@ -1,0 +1,12 @@
+---
+title: Exact duplicate workplace geocodes
+date: 2026-11-12
+status: COMPLETED
+---
+
+Saved failure: rais_workplace_files_09185f34d5c7a3fb, input year 2023.
+Read-only diagnostic found geocoder key expansion and exact repeated projected rows,
+but no distinct location records or coordinate conflicts per establishment key.
+Deduplicate exact projected geocode rows, preserve failure on conflicting keys, and
+write a separate lookup-cardinality audit. Keep existing employment links unchanged.
+Verify with synthetic Arrow inputs and syntax checks; do not re-extract RAIS or run targets.
