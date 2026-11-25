@@ -46,6 +46,12 @@ Variáveis de ambiente (opcionais):
 
 Log de cada alvo: `outputs/logs_pipeline/<alvo>.txt`. O relatório sai em `outputs/relatorio/relatorio_desenhos.html`.
 
+## Relatório renderizado
+
+`relatorio/relatorio_desenhos.html` é uma cópia do relatório gerado pelo pipeline (só números agregados). A versão de
+24/11/2026 ainda tem a acessibilidade calculada com os empregos de 2015; a versão final, com os empregos de 2012 e as
+matrizes de tempo até 240 min, vai substituí-la.
+
 ## Estágios
 
 | Estágio | Scripts |
