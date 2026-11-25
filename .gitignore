@@ -1,0 +1,55 @@
+# dados restritos (CadÚnico/RAIS) e derivados: nunca versionar
+data/
+outputs/
+
+# armazéns do targets (pipeline do projeto e pipeline arquivado de coortes anuais)
+_targets/
+_targets_caf/
+
+# biblioteca local de pacotes
+lib_r46_extra/
+
+# configuração local: caminhos absolutos desta máquina (o modelo versionado é R/00_config_local_exemplo.R)
+R/00_config_local.R
+
+# logs
+*.log
+*.out
+*.err
+logs/
+logs_*/
+
+# arquivos de dados e binários: nada disso entra, esteja onde estiver
+*.parquet
+*.feather
+*.rds
+*.RData
+*.rda
+*.dta
+*.sav
+*.gpkg
+*.shp
+*.dbf
+*.sqlite
+*.duckdb
+*.xlsx
+*.xls
+*.docx
+*.pptx
+*.zip
+*.gz
+
+# repositórios e material de terceiros
+externo/
+
+# R, editor e sistema
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+.Renviron
+Thumbs.db
+~$*
+
+# configuração local do Claude Code (servidor de pré-visualização)
+.claude/

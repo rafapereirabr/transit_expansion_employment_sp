@@ -1,0 +1,30 @@
+body { font-size: 15px; line-height: 1.5; }
+.resumo-topo { background: #f3f6fa; border-left: 4px solid #1F5A96; padding: 0.8em 1.1em; margin: 1em 0 1.6em 0; }
+table.tab { font-size: 13px; border-collapse: collapse; margin: 0.4em 0 1.2em 0; width: auto; }
+table.tab th { background: #eef2f6; font-weight: 600; padding: 4px 8px; border-bottom: 1px solid #b9c3cd; }
+table.tab td { padding: 3px 8px; border-bottom: 1px solid #e3e7eb; vertical-align: top; }
+.titulo-tab { font-weight: 600; margin: 1em 0 0.2em 0; }
+.legenda { font-size: 12.5px; color: #555; margin-top: -0.6em; }
+.pendente { color: #8a5a00; background: #fff6e0; padding: 0.4em 0.8em; border-radius: 4px; }
+details { margin: 0.6em 0 1.2em 0; }
+details > summary { cursor: pointer; color: #1F5A96; font-weight: 600; }
+.rolagem { overflow-x: auto; max-width: 100%; }
+table.tab td, table.tab th { white-space: nowrap; }
+table.tab td:first-child { white-space: normal; min-width: 9em; }
+table.tab.texto td { white-space: normal; }
+/* primeira coluna fixa nas tabelas largas */
+.rolagem table.tab th:first-child, .rolagem table.tab td:first-child { position: sticky; left: 0; background: #ffffff; z-index: 2; box-shadow: 2px 0 0 #e3e7eb; }
+.rolagem table.tab th:first-child { background: #eef2f6; z-index: 3; }
+.caixa { background: #f7f7f2; border: 1px solid #e2e0cf; border-radius: 4px; padding: 0.6em 1em; margin: 0.8em 0 1.2em 0; font-size: 14px; }
+.caixa h4 { margin-top: 0.2em; font-size: 15px; }
+/* guia de leitura de cada seção e resumo dos números */
+.guia { background: #eef4fa; border-left: 4px solid #1F5A96; padding: 0.5em 1em; margin: 0.6em 0 1.2em 0; font-size: 14px; }
+.guia p:last-child, .leitura p:last-child { margin-bottom: 0.2em; }
+.leitura { background: #f1f7f1; border-left: 4px solid #2E7D4F; padding: 0.5em 1em; margin: 0.8em 0 1.2em 0; font-size: 14px; }
+.leitura ul { margin-bottom: 0.3em; padding-left: 1.2em; }
+.leitura li { margin-bottom: 0.25em; }
+.leitura p { margin-bottom: 0.5em; }
+/* conclusão de cada desenho */
+.conclusao { background: #fbf7ec; border-left: 4px solid #B07D1A; padding: 0.6em 1.1em; margin: 0.8em 0 1.6em 0; font-size: 14.5px; }
+.conclusao p { margin-bottom: 0.6em; }
+.conclusao ul { margin-bottom: 0.6em; padding-left: 1.2em; }

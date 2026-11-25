@@ -1,0 +1,4 @@
+/.quarto/
+# gerados pela renderização (o HTML final vai para outputs/relatorio)
+/relatorio_desenhos_files/
+/relatorio_desenhos.html

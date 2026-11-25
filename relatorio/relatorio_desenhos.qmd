@@ -1,0 +1,1479 @@
+---
+title: "Expansão do metrô, do trem e do monotrilho em São Paulo e o emprego formal de pessoas do CadÚnico"
+subtitle: "Dados, desenhos de identificação e resultados"
+date: last-modified
+date-format: "DD/MM/YYYY HH:mm"
+lang: pt-BR
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-location: left
+    toc-title: "Conteúdo"
+    embed-resources: true
+    number-sections: false
+    fig-width: 9
+    fig-height: 5.2
+    fig-dpi: 110
+    css: relatorio.css
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+```
+
+```{r carrega}
+source("R/00_ambiente_r5.R")
+source("R/00_config.R")
+.libPaths(c(.libPaths(), "lib_r46_extra"))
+source("R/funcoes_desenhos.R")
+source("R/funcoes_relatorio.R")
+mes_data <- function(m) as.IDate(sprintf("%d-%02d-01", 2011L + (m - 1L) %/% 12L, (m - 1L) %% 12L + 1L))
+niv <- le_niveis()
+dd <- "data/base/explora/ev_cache"
+EV <- fread(file.path(dd, "eventos.csv"))
+setnames(EV, "coorte", "ev")
+AREA <- prepara_area(le_final("^area_h3[89].*_segmentos[.]csv$"))
+AREA_CT <- prepara_area(le_final("^area_h3[89].*_contrastes[.]csv$"))
+CTA <- prepara_ct_area(AREA_CT)
+PAR <- le_final("^par_h3[89].*_segmentos[.]csv$")
+if (!is.null(PAR)) PAR[is.na(fe) | fe == "", fe := "casa7trab7"]
+PAR_CT <- le_final("^par_h3[89].*_contrastes[.]csv$")
+PCT <- prepara_ct_par(PAR_CT)
+PAR_DESC <- le_final("^par_h3[89].*_descricao[.]csv$")
+ROB_A <- le_final("^robustez_area[.]csv$")
+ROB_P <- le_final("^robustez_par[.]csv$")
+## IPTW de área: as rodadas com todos os indicadores (arquivos "_todos") substituem as parciais
+le_iptw_area <- function(padrao, chave) {
+	x <- le_final(padrao)
+	if (is.null(x)) return(NULL)
+	x[, corte := as.character(corte)]
+	unique(x[order(!grepl("_todos", arquivo))], by = chave)
+}
+IPTW_A <- le_iptw_area("^iptw_area_.*_segmentos[.]csv$", c("nivel", "corte", "janela", "faixa", "segmento", "outcome"))
+IPTW_A_CT <- le_iptw_area("^iptw_area_.*_contrastes[.]csv$", c("nivel", "corte", "janela", "faixa", "contraste", "outcome"))
+IPTW_A_BAL <- le_iptw_area("^iptw_area_.*_balanco[.]csv$", c("nivel", "corte", "janela", "faixa", "segmento"))
+IPTW_P <- le_final("^iptw_par_.*_segmentos[.]csv$")
+IPTW_P_CT <- le_final("^iptw_par_.*_contrastes[.]csv$")
+IPTW_P_BAL <- le_final("^iptw_par_.*_balanco[.]csv$")
+FUT_A <- le_final("^futuros_area_.*_segmentos[.]csv$")
+FUT_P <- le_final("^futuros_par_.*_segmentos[.]csv$")
+FUT_A_CT <- le_final("^futuros_area_.*_contrastes[.]csv$")
+FUT_P_CT <- le_final("^futuros_par_.*_contrastes[.]csv$")
+FUT_AM <- le_final("^futuros_.*_amostra[.]csv$")
+ordena_seg <- function(d, col = "segmento") d[order(match(get(col), SEGS))]
+OC_B <- c("demissao_6", "demissao_12", "sem_justa_6", "justa_6", "pedido_6", "empregado_12")
+```
+
+::: {.resumo-topo}
+**Pergunta.** As aberturas de estações de metrô, trem (CPTM) e monotrilho em São Paulo entre 2013 e 2022 melhoraram a situação no emprego formal de pessoas de baixa renda inscritas no CadÚnico? Separamos duas margens:
+
+- **conseguir** um emprego: o ganho de acessibilidade a empregos a partir de casa aumenta o emprego, a entrada no emprego formal e o salário?
+- **manter** o emprego: para quem já está empregado, o ganho de tempo no trajeto casa → trabalho reduz desligamentos?
+
+**Como o documento está organizado.**
+
+1. **Dados:** fontes, mapa das linhas, eventos, amostras e desfechos. É comum a todos os desenhos.
+2. **Redes, tempos de viagem e acessibilidade:** como as redes de transporte foram montadas, como os tempos de viagem foram calculados, como a acessibilidade é medida e como o decaimento da gravitacional foi calibrado.
+3. **Resumo dos desenhos:** uma tabela com a pergunta, a comparação e o principal resultado de cada desenho, com links.
+4. **Uma seção por desenho (A a E),** sempre na mesma ordem:
+   - estratégia de identificação, explicada passo a passo;
+   - estatística descritiva;
+   - resultados;
+   - heterogeneidade (o efeito em cada grupo e as diferenças entre grupos);
+   - robustez;
+   - conclusão do desenho.
+5. **Conclusão geral:** o que os cinco desenhos dizem juntos, e os limites.
+
+**Como ler as tabelas.**
+
+- **Abas.** As tabelas de resultados têm abas, uma por tipo de desfecho (por exemplo, Emprego, Entrada, Permanência; ou Demissão, Demissão sem justa causa, Pedido de demissão). Clique no nome da aba para trocar.
+- **Linhas.** São grupos de pessoas (todos, mulheres, homens...) ou versões do indicador. A primeira coluna fica fixa quando a tabela rola para o lado.
+- **Colunas.** Seguem a ordem do tempo: 6, 12, 18 e 24 meses depois do mês de referência. Em cada horizonte aparecem lado a lado o efeito **depois** da abertura e o **placebo**.
+- **Células.** Cada célula traz o efeito estimado, as estrelas de significância e, entre parênteses, o erro-padrão. Estrelas: \* p < 0,10; \*\* p < 0,05; \*\*\* p < 0,01. Efeitos em pontos percentuais (p.p.), salvo indicação; salário em %.
+- **Placebo.** É a mesma conta feita com a referência 25 meses antes da primeira abertura, quando a estação ainda não existia, e por isso deve dar zero.
+  - Se o efeito "depois" é significativo e o placebo não, o resultado é crível.
+  - Se os dois são significativos, há diferenças que já existiam antes da estação, e o resultado pede cautela.
+- **Quadros verdes.** Os quadros "O que estes resultados mostram" resumem em palavras os números de cada bloco. São gerados a partir das próprias estimativas e se atualizam com elas.
+- **Quadros azuis.** Explicam como cada bloco está organizado.
+- **Quadros amarelos.** Indicam estimações ainda em execução.
+:::
+
+# Dados
+
+## Fontes e população
+
+- **População.** Pessoas de 18 a 60 anos inscritas no CadÚnico.
+  - O endereço usado é o mais recente entre quatro anos e um ano antes do evento, localizado num hexágono H3 de resolução 9 (cerca de 0,1 km²).
+  - A mesma pessoa pode entrar em mais de um evento.
+- **Emprego formal.** RAIS identificada, vínculos celetistas:
+  - emprego no fim de cada mês;
+  - admissões;
+  - desligamentos com a causa (pedido do trabalhador, demissão sem justa causa, demissão com justa causa);
+  - salário contratual;
+  - local de trabalho geocodificado.
+- **Criança na família.** Presença de criança de 0 a 5 anos na família da pessoa, a partir do cadastro completo do CadÚnico (todos os membros da família).
+- **Redes de transporte.**
+  - 27 redes de transporte público (GTFS): uma para cada estado da rede sobre trilhos entre 2013 e 2025, mais três com obras futuras.
+  - Os tempos de viagem porta a porta foram calculados com o r5r, até 240 minutos nos trajetos longos.
+- **Tratamentos.**
+  1. Acessibilidade a empregos a partir de casa, em duas formas:
+     - cumulativa: número de empregos alcançáveis em até 30, 45, 60 ou 90 minutos;
+     - gravitacional: soma dos empregos ponderados por uma função que decai com o tempo de viagem, calibrada com os deslocamentos observados.
+  2. Ganho de tempo no trajeto casa → próprio local de trabalho.
+
+## Linhas e estações
+
+O mapa mostra a rede sobre trilhos de 2025 (metrô, trem da CPTM e monotrilho da Linha 15) e as estações de cada nível. Cada nível é uma abertura com data própria de serviço pleno.
+
+- No seletor do canto superior direito dá para trocar o fundo do mapa e ligar ou desligar cada nível.
+- Clicando numa estação aparecem as datas de abertura e de serviço pleno.
+
+```{r mapa}
+mapa_linhas(niv, EV)
+```
+
+## Eventos
+
+Cada data de serviço pleno é um evento.
+
+- O **mês de referência** é o mês anterior ao serviço pleno. Os desfechos são medidos 6, 12, 18 e 24 meses depois dele.
+- O **placebo** usa como referência o 25.º mês antes da primeira abertura (operação assistida) das estações do evento. Assim, mesmo o horizonte de 24 meses termina antes de a estação existir.
+
+```{r eventos, results = "asis"}
+est <- fread("data/redes/estacoes_familia_a.csv", encoding = "UTF-8")
+modo_linha <- function(l) fcase(l %in% c(1, 2, 3, 4, 5), "metrô", l == 15, "monotrilho", default = "trem (CPTM)")
+ev_tab <- EV[order(ev), {
+	lv <- strsplit(niveis, ",")[[1]]
+	e <- est[rede %in% lv]
+	.(`Serviço pleno` = format(as.IDate(d_e), "%d/%m/%Y"), `Primeira abertura` = format(mes_data(o_min), "%m/%Y"),
+		Linhas = paste(sort(unique(paste0(e$code_line, " (", modo_linha(e$code_line), ")"))), collapse = ", "), `Estações` = paste(e$name_station, collapse = ", "),
+		`Mês de referência` = format(mes_data(ref_pos), "%m/%Y"), `Referência do placebo` = format(mes_data(ref_pre), "%m/%Y"))
+}, by = .(Evento = ev)]
+tabela(ev_tab, texto = TRUE)
+```
+
+## Amostras
+
+```{r amostras, results = "asis"}
+sa <- as.data.table(arrow::read_parquet(file.path(dd, "area_celulas.parquet"), col_select = c("ev", "janela", "n_todos", "n_com")))[janela == "pos",
+	.(pessoas = sum(n_todos), empregadas = sum(n_com)), by = ev]
+sp <- as.data.table(arrow::read_parquet(file.path(dd, "par_celulas.parquet"), col_select = c("evento", "janela", "n", "t_antes")))[janela == "pos" & t_antes > 0 & t_antes <= 241,
+	.(vinculos = sum(n), ate90 = sum(n * (t_antes <= 90))), by = .(ev = evento)]
+am <- merge(sa, sp, by = "ev", all = TRUE)[order(ev)]
+am <- rbind(am, am[, .(ev = NA_integer_, pessoas = sum(pessoas), empregadas = sum(empregadas), vinculos = sum(vinculos), ate90 = sum(ate90))])
+tabela(am[, .(Evento = fifelse(is.na(ev), "total", as.character(ev)), `Pessoas (desenho de área)` = num(pessoas, 0), `Empregadas no mês de referência` = num(empregadas, 0),
+	`Vínculos com local de trabalho (desenho de tempo de viagem)` = num(vinculos, 0), `Desses, com trajeto de até 90 min` = num(ate90, 0))],
+	legenda = "Pessoas e vínculos de cada evento, na janela depois da abertura. A mesma pessoa pode entrar em mais de um evento.")
+```
+
+## Desfechos
+
+O mês de referência (ref) é o mês anterior ao serviço pleno; h é o horizonte (6, 12, 18 ou 24 meses).
+
+```{r desfechos, results = "asis"}
+dsf <- data.table(
+	Margem = c(rep("Conseguir emprego (desenho de área)", 3), "Salário (desenho de área)", rep("Manter o emprego (desenho de tempo de viagem)", 6), "Para onde vai quem pede demissão"),
+	Desfecho = c("Emprego", "Entrada no emprego formal", "Permanência no emprego", "Salário-hora", "Demissão", "Demissão sem justa causa", "Demissão com justa causa",
+		"Pedido de demissão", "Qualquer desligamento", "Permanência no emprego", "Destino"),
+	`Quem entra na conta` = c("Todas as pessoas da população", "Só quem não tinha vínculo formal em ref", "Só quem tinha vínculo formal em ref",
+		"Só quem estava empregado em ref e em ref+h, com salário válido nos dois meses", rep("Vínculos celetistas ativos em ref cujo local de trabalho está geocodificado", 6),
+		"Vínculos que terminaram em pedido de demissão até ref+h"),
+	`Como é medido` = c(
+		"Estar empregado no fim do mês ref+h menos estar empregado no fim do mês ref (−1, 0 ou 1 por pessoa)",
+		"Teve algum vínculo celetista em algum mês entre ref+1 e ref+h (0 ou 1)",
+		"Está empregado (em qualquer vínculo) no fim do mês ref+h (0 ou 1); também a fração dos meses de ref+1 a ref+h com vínculo",
+		"100 × (log do salário-hora real do vínculo principal em ref+h − o mesmo em ref), em reais de dez/2023",
+		"O vínculo de ref terminou por demissão (sem ou com justa causa) até ref+h (0 ou 1)",
+		"O vínculo de ref terminou por demissão sem justa causa até ref+h",
+		"O vínculo de ref terminou por demissão com justa causa até ref+h",
+		"O vínculo de ref terminou por pedido do trabalhador até ref+h",
+		"O vínculo de ref terminou por qualquer motivo de desligamento até ref+h",
+		"Está empregado em qualquer vínculo no fim do mês ref+h; também a fração dos meses de ref+1 a ref+h com vínculo",
+		"Primeiro vínculo novo em outro estabelecimento até 12 meses depois do pedido: com trajeto mais curto ou não; com salário real pelo menos 5% maior ou não; em até 3 meses ou de 4 a 12 meses; ou nenhum vínculo formal novo"),
+	`Unidade do efeito` = c(rep("p.p.", 3), "%", rep("p.p.", 7)))
+tabela(dsf, texto = TRUE)
+```
+
+# Redes, tempos de viagem e acessibilidade {#metodos}
+
+::: {.guia}
+**Por que esta seção importa.** Todos os desenhos dependem de duas medidas construídas aqui:
+
+- o **ganho de tempo** no trajeto casa → trabalho (desenhos B a E);
+- o **ganho de acessibilidade** a empregos a partir de casa (desenhos A, D e E).
+
+As duas vêm da comparação entre versões da rede de transporte que só diferem pelas estações de uma abertura. Esta seção explica:
+
+1. como essas redes foram montadas;
+2. como os tempos de viagem foram calculados;
+3. como a acessibilidade é medida e como o decaimento da gravitacional foi calibrado.
+:::
+
+## Como as redes de transporte foram construídas (GTFS)
+
+::: {.caixa}
+#### A ideia: uma rede para cada momento da expansão
+
+Para saber quanto uma abertura mudou os trajetos, precisamos de duas redes que só diferem pelas estações dessa abertura. Montamos uma **família de 27 redes**, todas com o mesmo calendário (uma quarta-feira útil, 01/10/2025), os mesmos ônibus e as mesmas ruas. Elas mudam só nas estações de trilho:
+
+- **A00 — a rede de 2025:** metrô, CPTM e monotrilho como estavam em 2025, incluindo as estações abertas naquele ano (Varginha, na Linha 9, e Ambuitá, na Linha 8).
+- **A01 a A23 — a rede voltando no tempo:** cada rede tira, da anterior, as estações de uma abertura (um "nível": estações de uma linha que abriram na mesma data). Começamos pela abertura mais recente; a A23 é a rede anterior a 2013. Assim, comparar a rede com o nível e a rede sem ele dá o ganho daquela abertura.
+- **A24 a A26 — as obras futuras:** cada uma acrescenta à rede de 2025 uma linha inteira que ainda não existe (Linha 17-Ouro, Linha 6-Laranja e a extensão da Linha 2-Verde de Vila Prudente à Penha). São usadas no desenho E.
+:::
+
+::: {.caixa}
+#### Como cada rede foi montada
+
+- **Ônibus:** o GTFS da SPTrans de 2025, igual em todas as redes. Ônibus metropolitanos (EMTU) não entram.
+- **Ruas e relevo:** a malha viária do OpenStreetMap e o modelo de relevo da rede de 2025, iguais em todas as redes (usados para as caminhadas).
+- **Trilhos:** partimos do GTFS de trilhos de 2025.
+  - **Tirar uma estação do meio da linha:** o trem passa sem parar, e os tempos dos demais trechos ficam iguais.
+  - **Tirar a ponta da linha:** a linha encurta, e os tempos dos trechos restantes ficam iguais.
+  - **Estação nova sem tempo no GTFS:** o tempo da linha é repartido pela distância entre estações, com a velocidade média da própria viagem.
+  - **Obras futuras:** o traçado planejado do GeoSampa, com a velocidade comercial e os intervalos de uma linha parecida já em operação (35 km/h; monotrilho como a Linha 15, metrô como a Linha 4).
+- **"Números aleatórios comuns":** todas as redes têm as mesmas viagens, na mesma ordem e com os mesmos intervalos. Quando uma linha deixa de existir numa rede, ela vira um "trem fantasma", com os mesmos horários mas sem embarque. Isso faz o sorteio de horários do roteador ser o mesmo em todas as redes, para que a diferença entre duas redes venha só das estações, e não do acaso do sorteio.
+- **Conferência:** a rede reconstruída para a data de cada GTFS anual disponível (2012, 2015, 2019 e 2023) tem as mesmas estações por linha que o GTFS daquele ano (casamento por proximidade, até 300 m).
+:::
+
+## Como o tempo de viagem foi calculado
+
+::: {.caixa}
+- **Roteador:** r5r (R5), com transporte público e caminhada (a pé até o ponto ou a estação, nas baldeações e até o destino).
+- **Horário:** partidas entre 06:50 e 07:05 de uma quarta-feira útil (janela de 15 minutos). Para cada par, usamos a **mediana** do tempo de viagem nessa janela.
+- **Unidade espacial:** hexágonos H3 de resolução 9 (cerca de 0,1 km²), ligados pelo centro.
+  - **Origens:** 10.613 hexágonos (a grade da cidade mais os hexágonos onde moram inscritos no CadÚnico).
+  - **Destinos:** os hexágonos da grade, com os empregos.
+- **Limite:** a matriz completa vai até 90 minutos. Para os trajetos casa → trabalho que passam de 90 minutos em alguma rede, calculamos os tempos até 240 minutos em todas as 27 redes.
+- **Semente fixa** em todas as redes, junto com os números aleatórios comuns descritos acima.
+:::
+
+::: {.caixa}
+#### O trajeto casa → trabalho e o ganho de tempo (desenhos B a E)
+
+- **Casa:** o hexágono do endereço mais recente da pessoa no CadÚnico, entre quatro anos e um ano antes do evento.
+- **Trabalho:** o hexágono do estabelecimento do vínculo de referência, pela geocodificação da RAIS.
+- **Ganho de tempo de um evento:** tempo do par na rede sem as estações do evento menos o tempo na rede com elas. Quando o tempo sem as estações passa do limite (90 ou 240 minutos), ele é tratado como 91 ou 241 minutos.
+- **Trajeto antes do evento:** o tempo na rede vigente logo antes do evento. É ele que separa os trajetos de até 90 e de mais de 90 minutos.
+:::
+
+## Como a acessibilidade é calculada
+
+::: {.caixa}
+#### Empregos
+
+- **Fonte:** empregos formais da RAIS de 2015, vínculos ativos em 31/12, no hexágono do estabelecimento.
+- **Mesmo ano em todas as redes:** o ano dos empregos é o mesmo em todas as redes, para que o ganho de acessibilidade venha só da mudança no transporte, e não da mudança no lugar dos empregos.
+:::
+
+::: {.caixa}
+#### Acessibilidade cumulativa (30, 45, 60 e 90 minutos)
+
+Para cada hexágono de moradia, é o **número de empregos que dá para alcançar em até X minutos** de transporte público. Todos os empregos dentro do limite contam igual, e os de fora não contam.
+
+- **Ganho absoluto:** diferença em número de empregos (na unidade de +100 mil).
+- **Ganho percentual:** diferença dividida pela acessibilidade de logo antes do evento (com piso de 1.000 empregos), na unidade de +10%.
+:::
+
+::: {.caixa}
+#### Acessibilidade gravitacional e a calibração do decaimento
+
+A cumulativa tem um defeito: um emprego a 59 minutos conta inteiro, e um a 61 minutos não conta nada. A gravitacional resolve isso dando a cada emprego um **peso que diminui com o tempo de viagem**:
+
+<p style="text-align:center"><i>A<sub>i</sub> = Σ<sub>j</sub> empregos<sub>j</sub> × exp(−β × t<sub>ij</sub>)</i></p>
+
+Nessa fórmula:
+
+- *A<sub>i</sub>* é a acessibilidade do hexágono de moradia *i*;
+- a soma vai sobre todos os hexágonos de destino *j*, até 240 minutos;
+- *t<sub>ij</sub>* é o tempo de viagem;
+- *β* diz quão rápido o peso cai.
+
+**Calibração de β.** Escolhemos β para refletir quanto tempo as pessoas do CadÚnico de fato viajam até o trabalho:
+
+- calculamos o tempo médio do trajeto casa → trabalho dos inscritos que estavam empregados em 31/12/2012, na rede de 2012 e com trajetos até 240 minutos;
+- esse tempo médio é de **78,8 minutos** (59.398 trabalhadores);
+- fizemos **β = 1 / 78,8 = 0,0127 por minuto**.
+
+Com essa escolha, um emprego no tempo médio de viagem pesa exp(−1) ≈ 0,37. Uma estimativa alternativa, a partir da queda no número de trabalhadores conforme o tempo, deu β = 0,0367, um decaimento bem mais rápido. Ela não é usada nos resultados.
+
+**Ganho gravitacional:** a diferença entre a rede com e sem as estações do evento.
+
+- **Medida percentual:** em log (+0,1 no log ≈ +10%), com a acessibilidade de antes com piso de 1.000 e o ganho limitado a +100%.
+- **Medida absoluta:** em empregos ponderados (unidade de +100 mil).
+:::
+
+```{r metodos-decaimento, results = "asis"}
+tt <- c(15, 30, 45, 60, 78.8, 90, 120, 180, 240)
+tabela(data.table(`Tempo de viagem (min)` = ifelse(tt %% 1 == 0, num(tt, 0), paste0(num(tt, 1), " (tempo médio)")), `Peso de um emprego na gravitacional` = num(exp(-0.0127 * tt), 2),
+	`Conta na cumulativa de 60 min?` = fifelse(tt <= 60, "sim (peso 1)", "não (peso 0)")),
+	titulo = "Quanto pesa um emprego conforme o tempo de viagem", legenda = "Gravitacional com β = 0,0127 por minuto (1 / 78,8 min, o tempo médio casa → trabalho dos inscritos empregados em 2012).")
+```
+
+::: {.caixa}
+#### Ganho de cada evento e ganho nos sorteios do B&H
+
+- **Ganho de um evento:** a soma dos ganhos dos níveis que entraram em serviço pleno naquela data. O ganho de cada nível é sempre a rede com o nível menos a rede sem ele.
+- **Ganho nos sorteios do B&H:** nos 199 sorteios das datas, o ganho que cada lugar teria tido em cada evento é a soma dos ganhos dos níveis sorteados para aquela data ("atalho aditivo").
+  - Esse atalho evita rotear de novo milhares de redes.
+  - Ele supõe que os ganhos de níveis diferentes se somam.
+:::
+
+# Resumo dos desenhos
+
+::: {.guia}
+**Como os desenhos se encaixam.**
+
+- **A e B são os desenhos principais.** Os dois usam a mesma fonte de variação: o calendário das aberturas, pelo método de Borusyak e Hull (B&H). A responde à margem de **conseguir** emprego; B, à de **manter** o emprego.
+- **C** abre o resultado de B sobre os pedidos de demissão: mostra para onde vai quem pede demissão.
+- **D e E refazem as mesmas perguntas com outras comparações,** que dependem de hipóteses diferentes:
+  - D compara tratados com controles que se parecem com eles nas características observadas (IPTW);
+  - E compara tratados com pessoas que vão ter o mesmo ganho mais tarde.
+
+Quando os três tipos de comparação apontam na mesma direção, o resultado fica mais confiável, porque um erro de hipótese dificilmente enganaria os três da mesma forma.
+:::
+
+```{r resumo, results = "asis"}
+res <- data.table(
+	Desenho = c('<a href="#a">A. Acessibilidade a partir de casa (B&amp;H)</a>', '<a href="#b">B. Tempo de viagem ao próprio emprego (B&amp;H)</a>',
+		'<a href="#c">C. Quem pediu demissão</a>', '<a href="#d">D. IPTW</a>', '<a href="#e">E. Controles futuros na mesma faixa</a>'),
+	Pergunta = c(
+		"Ganhar acessibilidade a empregos a partir de casa aumenta o emprego, a entrada no emprego formal, a permanência e o salário?",
+		"Para quem já está empregado, encurtar o trajeto casa → trabalho reduz demissões e pedidos de demissão?",
+		"Quem pede demissão depois da abertura sai para um emprego mais perto, mais bem pago, ou sai do emprego formal?",
+		"Comparando quem teve um ganho numa faixa com quem praticamente não teve ganho, mas era parecido antes da abertura (idade, sexo, histórico de emprego, bairro), o resultado se repete?",
+		"Comparando quem ganhou agora com quem vai ter um ganho da mesma faixa mais tarde (em qualquer abertura posterior), o resultado se repete?"),
+	`Com quem comparamos` = c(
+		"Com a própria pessoa num mundo em que as mesmas estações tivessem aberto em outras datas: sorteamos 199 vezes as datas de serviço pleno entre as aberturas e comparamos o ganho que de fato aconteceu com o ganho médio desses sorteios. Também comparamos só vizinhos do mesmo bairro (célula de cerca de 5 km²).",
+		"Igual ao desenho A, mas por par casa × trabalho: trabalhadores que moram no mesmo bairro e trabalham no mesmo bairro, cujos trajetos mudaram de forma diferente só por causa da data em que cada estação abriu.",
+		"Mesmo desenho B, dividindo o pedido de demissão pelo destino de quem saiu.",
+		"Pessoas (ou vínculos) com ganho numa faixa (por exemplo, 10 min ou mais) contra pessoas com ganho quase nulo no mesmo evento, reponderadas para ficarem parecidas com as tratadas nas características anteriores à abertura.",
+		"Pessoas (ou vínculos) com ganho numa faixa neste evento contra pessoas que não ganharam nada durante a janela do evento, mas cujo primeiro ganho, numa abertura posterior, cai na mesma faixa."),
+	`Principais resultados` = c(resumo_a(AREA), resumo_b(PAR), resumo_c(PAR), resumo_d(IPTW_P, IPTW_A, IPTW_P_BAL), resumo_e(FUT_A, FUT_P)))
+tabela(res, texto = TRUE)
+```
+
+**Índice dos desenhos**
+
+- [A. Acessibilidade a partir de casa (B&H)](#a)
+- [B. Tempo de viagem ao próprio emprego (B&H)](#b)
+- [C. Quem pediu demissão](#c)
+- [D. IPTW](#d)
+- [E. Controles futuros na mesma faixa](#e)
+- [Conclusão geral](#conclusao)
+- [Como as redes, os tempos de viagem e a acessibilidade foram calculados](#metodos)
+
+# A. Acessibilidade a partir de casa (B&H) {#a}
+
+::: {.guia}
+**Em uma frase.** Usamos o "acaso do calendário" (a data em que cada estação abriu dependeu de atrasos de obra e licitações) para medir se ganhar acessibilidade a empregos a partir de casa muda a chance de ter emprego formal.
+
+**Como esta seção está organizada.**
+
+1. **Estratégia:** o problema, a ideia e a conta passo a passo.
+2. **Descritiva:** de quanto foi o ganho de acessibilidade.
+3. **Resultados:**
+   - um gráfico com todos os indicadores na mesma escala;
+   - tabelas com uma aba por desfecho.
+4. **Heterogeneidade:** o efeito em cada grupo e as diferenças entre grupos, para cada indicador.
+5. **Robustez:** testes que mudam uma escolha de cada vez.
+:::
+
+## Estratégia de identificação
+
+::: {.caixa}
+#### O problema: por que não basta comparar quem ganhou com quem não ganhou
+
+Lugares que ganham estação não são sorteados: o metrô e o trem vão para corredores onde já há demanda, com população e empregos diferentes do resto da cidade. Além disso, o mercado de trabalho muda ao longo do tempo (recessão de 2015–2016, pandemia de 2020).
+
+Comparar quem mora perto de uma estação nova com quem mora longe mistura o efeito da estação com essas diferenças que já existiam. Na linguagem de econometria, o ganho de acessibilidade é **endógeno**: está correlacionado com outras coisas que também afetam o emprego.
+:::
+
+::: {.caixa}
+#### A ideia: usar a sorte do calendário
+
+O desenho usa outra fonte de variação: **o momento** em que cada estação abre.
+
+- O traçado das linhas e o local das estações são decididos com muitos anos de antecedência.
+- Já a data exata em que cada estação entra em serviço pleno depende de atrasos de obra, licitações, testes e contratos.
+
+Suponha que uma estação abriu em 2018, e não em 2016 ou em 2020, por razões desse tipo. Então, entre lugares que "estavam na fila" para ganhar acessibilidade, quem ganhou primeiro foi, em boa medida, questão de sorte do calendário.
+:::
+
+::: {.caixa}
+#### Como a comparação é feita, passo a passo
+
+1. **Ganho realizado.** Para cada hexágono de moradia e cada evento, calculamos quanto a acessibilidade a empregos aumentou por causa das estações que entraram em serviço pleno naquela data.
+2. **Ganho esperado.**
+   - Sorteamos 199 vezes as 26 datas de serviço pleno entre as aberturas, mantendo a ordem das estações dentro de cada linha (uma extensão não pode abrir antes do trecho anterior).
+   - Em cada sorteio, recalculamos o ganho que o hexágono teria tido naquele evento.
+   - A média dos 199 sorteios é o **ganho esperado**: o quanto aquele lugar está exposto às aberturas só por estar onde está.
+3. **Ganho recentrado.** A diferença entre o ganho realizado e o ganho esperado é a parte do ganho que se deve só ao calendário. É essa parte que identifica o efeito (Borusyak e Hull, 2023).
+4. **Regressão.** O desfecho de cada pessoa é regredido no ganho, com dois controles:
+   - **o ganho esperado**, com uma inclinação própria por evento. Lugares muito expostos às aberturas (perto do traçado) só são comparados com lugares igualmente expostos; isso resolve o problema de as estações irem para lugares diferentes.
+   - **um efeito fixo de célula H3-7 × evento**. Um efeito fixo é uma constante própria de cada grupo. Com ele, só comparamos pessoas do mesmo bairro (célula de cerca de 5 km²) no mesmo evento, o que tira da comparação tudo o que é comum ao bairro e ao momento.
+5. **Placebo.** Repetimos tudo com os desfechos medidos antes de qualquer abertura. Se o desenho estiver certo, o "efeito" no placebo deve ser zero.
+:::
+
+::: {.caixa}
+#### O que o coeficiente significa
+
+É a variação do desfecho (em p.p.; salário em %) causada por uma unidade a mais de ganho de acessibilidade. Mostramos o ganho de duas formas:
+
+- **ganho absoluto:** por +100 mil empregos alcançáveis (cumulativa) ou +100 mil empregos ponderados pelo tempo de viagem (gravitacional);
+- **ganho percentual:** por +10% sobre a acessibilidade que a pessoa tinha logo antes do evento (na gravitacional, +0,1 no log, que é aproximadamente +10%).
+
+Os indicadores têm escalas muito diferentes. Por isso, o gráfico mostra o efeito de **1 desvio-padrão** do ganho realizado, que permite compará-los.
+:::
+
+::: {.caixa}
+#### O que precisa ser verdade (hipóteses)
+
+1. **A data é quase aleatória, dado o lugar.** Entre hexágonos com o mesmo ganho esperado e no mesmo bairro, o fato de a estação ter aberto nesta data e não em outra não está ligado a fatores que afetam o emprego da pessoa.
+2. **Os sorteios representam datas plausíveis.** Os sorteios só trocam datas que poderiam ter acontecido (a ordem dentro de cada linha é mantida).
+3. **Sem antecipação nem outros choques coincidentes.** O desfecho não reage antes da abertura, e nenhum outro choque acontece justamente nas datas sorteadas. O placebo testa isso.
+4. **O efeito passa pelo próprio ganho.** O emprego de uma pessoa depende do ganho de acessibilidade dela, e não do ganho de outros lugares (efeitos de transbordamento entre bairros ficam fora).
+:::
+
+::: {.caixa}
+#### Como ler a incerteza
+
+- **p por permutação:**
+  - comparamos o efeito estimado com os 199 efeitos que obteríamos se as datas verdadeiras fossem as de um dos sorteios;
+  - o p é a fração dos sorteios com efeito tão grande quanto o verdadeiro;
+  - se o p é pequeno, o efeito dificilmente é sorte.
+- **Erro-padrão:** agrupado por célula de 5 km, porque vizinhos sofrem choques parecidos.
+- **Unidade:**
+  - na versão principal, hexágono H3-9 × evento, com peso igual ao número de pessoas, o que dá exatamente o mesmo resultado de uma regressão com uma linha por pessoa;
+  - na versão agregada, o hexágono H3-8 (cerca de 0,7 km²).
+:::
+
+## Estatística descritiva
+
+A tabela mostra o tamanho do ganho realizado de acessibilidade em cada indicador.
+
+- Em cada evento, a maioria das pessoas mora longe das estações daquele evento e quase não ganha nada. Por isso a média é pequena e o desvio-padrão é grande em relação a ela.
+- É o desvio-padrão que usamos para pôr os indicadores na mesma escala no gráfico de resultados.
+
+```{r a-desc, results = "asis"}
+if (is.null(AREA)) em_execucao() else {
+	d <- unique(AREA[nivel == "h39" & fe == "casa7" & segmento == "todos" & janela == "pos" & outcome == "emprego_12",
+		.(ind, medida, unidade = dose, dose_media, dose_dp, pessoas, unidades)], by = c("ind", "medida"))[order(ind, medida)]
+	tabela(d[, .(Indicador = ind, Medida = medida, `Unidade da dose` = unidade, `Ganho médio` = num(dose_media, 3), `Desvio-padrão` = num(dose_dp, 3),
+		`Pessoas × evento` = num(pessoas, 0), `Hexágonos × evento` = num(unidades, 0))],
+		legenda = "Ganho realizado do evento por pessoa, na unidade da dose (por exemplo, 0,05 = 5 mil empregos na unidade de +100 mil; 0,3 = 3% na unidade de +10%).")
+}
+```
+
+## Resultados
+
+::: {.guia}
+**Como estes resultados estão organizados.**
+
+- **O gráfico** mostra o efeito de 1 desvio-padrão do ganho, para todas as pessoas:
+  - uma coluna por indicador e uma linha por desfecho;
+  - em azul, depois da abertura; em laranja, o placebo;
+  - círculo para o ganho absoluto e triângulo para o percentual;
+  - as barras são intervalos de 95%: quando cruzam o zero, o efeito não é distinguível de zero.
+- **As tabelas** têm uma aba por desfecho. Em cada aba:
+  - as linhas são os indicadores, cada um com o ganho absoluto e o percentual;
+  - as colunas seguem o tempo (6, 12, 18 e 24 meses), com o efeito depois da abertura e o placebo lado a lado;
+  - o efeito está por unidade da dose, conforme a legenda.
+:::
+
+```{r a-fig, fig.height = 9.5}
+if (!is.null(AREA)) graf_area(AREA[nivel == "h39" & fe == "casa7" & segmento == "todos"])
+```
+
+```{r a-leitura, results = "asis"}
+if (!is.null(AREA)) texto_contagem(area_principal(AREA), CAT_AREA, hs = c(12, 24), bcol = "efeito_1dp", pcol = "p_perm", rot = "versao",
+	versoes = "versões (cinco indicadores × ganho absoluto e percentual)",
+	intro = "Para comparar indicadores de escalas diferentes, os números abaixo são efeitos de <b>1 desvio-padrão do ganho de acessibilidade</b> (em p.p.; no salário, em %). Com tantas versões, algumas podem dar significativas só por acaso (cerca de 1 em cada 20, a 5%); por isso cada uma é comparada com o seu placebo.")
+```
+
+```{r a-tab, results = "asis"}
+if (is.null(AREA)) em_execucao() else tabelas_area_principal(AREA)
+```
+
+## Heterogeneidade
+
+::: {.caixa}
+#### Os grupos
+
+- **Mulheres / homens:** sexo no CadÚnico.
+- **18 a 29, 30 a 44, 45 a 60:** idade em 1º de janeiro do ano do evento.
+- **Com criança / sem criança:** a família tem (ou não) criança de 0 a 5 anos no CadÚnico, no ano do endereço usado.
+- **Mulheres com criança** etc.: cruzamento das duas características.
+
+**Diferenças entre grupos.**
+
+- A diferença é o efeito no primeiro grupo menos o efeito no segundo (por exemplo, "mulheres − homens").
+- As duas estimativas vêm de um único modelo em que cada grupo tem o próprio efeito. Por isso, o erro-padrão da diferença leva em conta que os grupos dividem os mesmos bairros.
+- Na idade, além das diferenças entre pares de faixas, há um teste conjunto de que as três faixas têm o mesmo efeito.
+:::
+
+::: {.guia}
+**Como esta parte está organizada.**
+
+- Há uma aba por indicador e medida do ganho (por exemplo, "60 min, absoluto"). Dentro dela, uma aba por desfecho.
+- Em cada aba de desfecho:
+  - primeiro vem a tabela com o efeito em cada grupo;
+  - logo abaixo, a tabela com as diferenças entre grupos.
+- No topo de cada indicador, o quadro verde conta quantas diferenças são significativas e quantas seriam esperadas só por acaso.
+- Como há muitos grupos, desfechos e horizontes, algumas diferenças "significativas" aparecem por pura sorte. O quadro ajuda a separar o padrão do ruído.
+:::
+
+```{r a-het-geral, results = "asis"}
+if (!is.null(CTA)) texto_contrastes(CTA, d_dig = 3, escopo = "de indicador, medida do ganho, grupos, desfechos e horizontes",
+	titulo = "Visão geral: diferenças entre grupos em todos os indicadores")
+```
+
+```{r a-het, results = "asis"}
+if (is.null(AREA)) em_execucao() else het_area(AREA, CTA)
+```
+
+## Robustez
+
+::: {.guia}
+**Para que serve esta parte.** Cada teste muda uma escolha do desenho principal e confere se o resultado se mantém.
+
+- Como o resultado principal do desenho A é nulo para emprego e entrada, a pergunta aqui é a inversa: algum teste revela um efeito que a especificação principal esconderia?
+- Os testes de vizinhança e unidade usam a cumulativa de 60 minutos (absoluta) e a gravitacional (percentual), os dois indicadores de referência.
+:::
+
+#### Unidade de análise e comparação entre vizinhos
+
+Cada linha muda uma escolha da especificação principal:
+
+- **Principal:**
+  - unidade: hexágono H3-9 (cerca de 0,1 km²);
+  - compara só vizinhos do mesmo bairro (célula H3-7, cerca de 5 km²) no mesmo evento.
+- **Agregado em H3-8:**
+  - unidade maior (cerca de 0,7 km²);
+  - **objetivo:** reduzir o erro de localização do endereço.
+- **Vizinhança menor:**
+  - compara só pessoas da mesma célula H3-8;
+  - **objetivo:** comparar pessoas ainda mais parecidas.
+- **Sem comparação por bairro:**
+  - compara toda a cidade no mesmo evento;
+  - **objetivo:** mostrar quanto a comparação por bairro importa.
+
+```{r a-rob1, results = "asis"}
+if (!is.null(AREA)) {
+	d <- AREA[segmento == "todos" & ((ind == "60 min" & medida == "absoluto") | (ind == "gravitacional" & medida == "percentual"))]
+	d[, espec := especificacao_area(nivel, fe)]
+	d <- unique(d[!is.na(espec)], by = c("espec", "ind", "outcome", "janela"))
+	d[, `:=`(c = cel(efeito, ep, p_perm, 3), linha = paste0(espec, " · ", ind))]
+	ordl <- as.vector(t(outer(ESPEC_AREA, c("60 min", "gravitacional"), paste, sep = " · ")))
+	tabs_categoria(d, CAT_AREA, "linha", "Especificação · indicador", ordem = ordl,
+		legenda = "60 min: por +100 mil empregos; gravitacional: por +0,1 no log (≈ +10%).")
+	y <- d[janela == "pos" & outcome %in% c("emprego_12", "entrada_12", "entrada_24")]
+	if (nrow(y)) {
+		corpo <- character(0)
+		for (o in c("emprego_12", "entrada_12", "entrada_24")) for (i in c("60 min", "gravitacional")) {
+			z <- y[outcome == o & ind == i][order(match(espec, ESPEC_AREA))]
+			if (nrow(z)) corpo <- c(corpo, frase_variantes(z[, .(versao = fifelse(espec == ESPEC_AREA[1], "principal", sub(" \\(.*", "", espec)), b = efeito, p = p_perm)],
+				paste0(maiuscula(desf_txt(o)), ", ", if (i == "60 min") "cumulativa de 60 min (por +100 mil empregos)" else "gravitacional (por +10%)")))
+		}
+		html_leitura("O que este teste mostra (todas as pessoas, depois da abertura)", corpo)
+	}
+}
+```
+
+```{r a-rob2, results = "asis"}
+if (is.null(ROB_A)) em_execucao("outras aberturas, vizinhança menor, faixas de ganho") else robustez_area_texto(ROB_A)
+```
+
+#### Retirando um evento por vez
+
+**Objetivo.** Verificar se o resultado depende de uma única abertura, por exemplo, de um evento grande ou atípico.
+
+**Como é feito.** Reestimamos o efeito 19 vezes, cada vez sem um dos eventos.
+
+**Como ler o gráfico.**
+
+- Cada ponto é o efeito sem o evento indicado no eixo horizontal.
+- A linha tracejada é o efeito com todos os eventos.
+- Se os pontos ficam todos perto da linha tracejada, nenhum evento sozinho muda o resultado.
+
+```{r a-loo, fig.height = 6}
+if (!is.null(ROB_A)) graf_loo(ROB_A[segmento == "todos" & janela == "pos" & outcome %in% c("emprego_12", "entrada_24")], ROB_A[segmento == "todos" & janela == "pos" & teste == "principal" & termo == "dose"])
+```
+
+```{r a-loo-leitura, results = "asis"}
+if (!is.null(ROB_A)) {
+	l <- ROB_A[grepl("^R3", teste) & segmento == "todos" & janela == "pos" & outcome %in% c("emprego_12", "entrada_24")]
+	p <- ROB_A[teste == "principal" & termo == "dose" & segmento == "todos" & janela == "pos" & outcome %in% c("emprego_12", "entrada_24")]
+	if (nrow(l)) {
+		corpo <- character(0)
+		for (o in c("emprego_12", "entrada_24")) for (ds in c("c60", "grav")) {
+			li <- l[outcome == o & dose == ds, .(efeito, p = p_perm, evento_fora)]
+			pr <- p[outcome == o & dose == ds]
+			if (nrow(li) && nrow(pr)) corpo <- c(corpo, frase_loo(li, pr$efeito[1], pr$p_perm[1],
+				paste0(maiuscula(desf_txt(o)), ", ", if (ds == "c60") "cumulativa de 60 min (por +100 mil empregos)" else "gravitacional (por +10%)")))
+		}
+		html_leitura("O que este teste mostra", corpo)
+	}
+}
+```
+
+## Conclusão do desenho A
+
+```{r a-conclusao, results = "asis"}
+conclusao_a(AREA, CTA, ROB_A)
+```
+
+# B. Tempo de viagem ao próprio emprego (B&H) {#b}
+
+::: {.guia}
+**Em uma frase.** Para quem já tem emprego formal, usamos o mesmo "acaso do calendário" do desenho A para medir se encurtar o trajeto de transporte público entre a casa e o trabalho muda a chance de ser demitido, de pedir demissão ou de continuar empregado.
+
+**Como esta seção está organizada.**
+
+1. **Estratégia:** a pergunta, o problema, a ideia, a conta passo a passo e os dois modelos (B1 e B2).
+2. **Descritiva:** quantos trabalhadores tiveram o trajeto encurtado e em quantos minutos.
+3. **Resultados do B1** (só o trajeto):
+   - três abas: trajetos de até 90 minutos, trajetos de mais de 90 minutos e todos os trajetos juntos;
+   - em cada aba, um gráfico, o quadro de leitura e as tabelas por tipo de desfecho.
+4. **Diferenças entre grupos:** o efeito é maior para mulheres? Para quem tem criança pequena?
+5. **B2:** o efeito do trajeto e o da acessibilidade a outros empregos, estimados juntos.
+6. **Robustez.**
+:::
+
+## Estratégia de identificação
+
+::: {.caixa}
+#### A pergunta
+
+Este desenho olha só para quem **já tem emprego formal**. A pergunta é: quando uma estação nova encurta o trajeto de transporte público entre a casa e o local de trabalho de alguém, isso muda a chance de essa pessoa:
+
+- perder o emprego (ser demitida);
+- pedir demissão;
+- continuar empregada?
+
+Há boas razões para esperar algum efeito, em direções opostas:
+
+- um trajeto mais curto e mais previsível reduz atrasos, faltas e cansaço, o que pode diminuir as demissões;
+- ao mesmo tempo, ele pode facilitar a procura de outro emprego, o que poderia aumentar os pedidos de demissão.
+:::
+
+::: {.caixa}
+#### O problema: por que não basta comparar quem ganhou com quem não ganhou
+
+O caminho mais simples seria comparar trabalhadores cujo trajeto melhorou com trabalhadores cujo trajeto não melhorou. Isso dá uma resposta errada, por dois motivos.
+
+1. **Quem ganha é diferente de quem não ganha.**
+   - As linhas vão para corredores escolhidos pelo planejamento: bairros e centros de emprego com mais demanda.
+   - Quem mora e trabalha nesses lugares tende a ter empregos, setores e salários diferentes de quem mora e trabalha longe deles.
+   - Se encontrássemos menos demissões entre os que ganharam, não saberíamos se é efeito da estação ou se esses trabalhadores já eram mais estáveis antes.
+2. **O momento também importa.**
+   - O mercado de trabalho muda muito ao longo do tempo (por exemplo, a recessão de 2015–2016 e a pandemia de 2020).
+   - Comparar trabalhadores observados em datas diferentes mistura o efeito da estação com esses ciclos.
+
+Na linguagem de econometria, o ganho de trajeto é **endógeno**: está correlacionado com outras coisas que também afetam o emprego. O desenho abaixo existe para isolar a parte do ganho que não está ligada a essas outras coisas.
+:::
+
+::: {.caixa}
+#### A ideia: usar a sorte do calendário
+
+- O traçado das linhas e o local das estações são decididos com muitos anos de antecedência.
+- Já a **data** em que cada estação entra em serviço pleno depende de atrasos de obra, licitações, testes e contratos.
+
+Suponha que uma estação abriu em 2018, e não em 2016 ou 2020, por razões desse tipo. Então, entre trabalhadores cujo trajeto "estava na fila" para melhorar, quem teve o trajeto encurtado **neste** evento, e não em outro, foi em boa medida uma questão de sorte do calendário.
+
+O método de Borusyak e Hull (2023), que chamamos de **B&H**, transforma essa ideia numa conta.
+:::
+
+::: {.caixa}
+#### Como a conta é feita, passo a passo
+
+1. **Quem entra.**
+   - Pessoas do CadÚnico com vínculo celetista ativo no mês de referência (o mês anterior ao serviço pleno do evento), cujo local de trabalho está geocodificado.
+   - Cada observação é um **par casa × trabalho**: o hexágono de moradia (H3 de resolução 9, cerca de 0,1 km²) e o hexágono do local de trabalho.
+2. **Ganho realizado.** Para cada par e cada evento, calculamos quantos minutos o trajeto de transporte público casa → trabalho encurtou por causa das estações que entraram em serviço pleno naquela data.
+3. **Ganho esperado (a recentragem).**
+   - Fazemos 199 sorteios. Em cada um, embaralhamos as 26 datas de serviço pleno entre as aberturas, mantendo a ordem das estações dentro de cada linha (uma extensão não pode abrir antes do trecho anterior).
+   - Em cada sorteio, recalculamos quantos minutos o trajeto daquele par teria encurtado naquele evento.
+   - A média dos 199 sorteios é o **ganho esperado**: quanto aquele par está exposto às aberturas só por causa de onde a pessoa mora e trabalha.
+   - A diferença entre o ganho realizado e o ganho esperado é o **ganho recentrado**, a parte que se deve só ao calendário.
+4. **Regressão.** Para cada pessoa, o desfecho (por exemplo, ter sido demitida até 6 meses depois) é comparado com o ganho de trajeto. A comparação controla:
+   - **o ganho esperado**, com uma inclinação própria para cada evento. Isso resolve o primeiro problema acima: pares muito expostos às aberturas (perto do traçado) são comparados com pares igualmente expostos, e o que sobra é a diferença devida ao calendário.
+   - **efeitos fixos de bairro de casa × evento e de bairro de trabalho × evento** (células H3 de resolução 7, cerca de 5 km²).
+     - Um efeito fixo é uma constante própria de cada grupo: com ele, só comparamos trabalhadores que moram no mesmo bairro e trabalham no mesmo bairro, observados no mesmo evento.
+     - Isso tira da comparação tudo o que é comum a um bairro de moradia (renda, perfil das famílias), a um bairro de trabalho (setores, tamanho das empresas) e a um momento (ciclo econômico). Resolve, assim, o segundo problema e parte do primeiro.
+5. **Separação dos trajetos.**
+   - O efeito é estimado separadamente para trajetos que levavam **até 90 minutos** antes do evento e para os que levavam **mais de 90 minutos** (ver abaixo).
+   - Também mostramos a versão **sem essa separação**, com o ganho em minutos e em % do tempo de antes.
+6. **Placebo.**
+   - Repetimos tudo com os desfechos medidos **25 meses antes** da primeira abertura, quando a estação ainda não existia. Se o desenho estiver certo, o "efeito" no placebo deve ser zero.
+   - Um placebo diferente de zero indicaria que trabalhadores com ganhos maiores já tinham trajetórias diferentes antes.
+:::
+
+::: {.caixa}
+#### Dois modelos
+
+- **B1 (só o trajeto):** o desfecho depende do ganho de tempo no trajeto até o emprego atual. É o modelo principal.
+- **B2 (trajeto e acessibilidade):**
+  - acrescenta, na mesma regressão, o ganho de acessibilidade a outros empregos a partir de casa (gravitacional, +0,1 no log ≈ +10%);
+  - serve para separar dois canais: "o meu trajeto ficou mais curto" e "ficou mais fácil chegar a outros empregos".
+:::
+
+::: {.caixa}
+#### Por que separar trajetos de até 90 e de mais de 90 minutos
+
+- Trajetos de mais de 90 minutos são outro tipo de deslocamento (longas distâncias, muitas baldeações), e os ganhos em minutos neles são muito maiores.
+- Num único coeficiente, esses trajetos dominariam a estimativa.
+- A versão sem separação aparece nos resultados para comparação.
+:::
+
+::: {.caixa}
+#### O que precisa ser verdade (hipóteses)
+
+1. **A data é quase aleatória, dado o lugar.** Entre pares com o mesmo ganho esperado, nos mesmos bairros de casa e de trabalho, o fato de a estação ter aberto nesta data e não em outra não está ligado a outros fatores que afetam a chance de desligamento.
+2. **Os sorteios representam datas plausíveis.** Só trocamos datas que poderiam ter acontecido.
+3. **Sem antecipação.** Empresas e trabalhadores não mudam de comportamento antes da abertura. O placebo testa isso.
+4. **O efeito vem do próprio trajeto.** O desligamento de uma pessoa depende do trajeto dela, e não do de colegas.
+:::
+
+::: {.caixa}
+#### Como ler a incerteza
+
+- **p por permutação:**
+  - comparamos o efeito estimado com os 199 efeitos que teríamos obtido se as datas verdadeiras fossem as de um dos sorteios;
+  - o p é a fração dos sorteios com efeito tão grande quanto o verdadeiro;
+  - se o p é pequeno, o efeito dificilmente é sorte.
+- **Erro-padrão:** agrupado por célula de 5 km, porque trabalhadores vizinhos sofrem choques parecidos.
+- **Unidade:**
+  - na versão principal, pares H3-9 × evento, com peso igual ao número de vínculos, o que dá o mesmo resultado de uma regressão com uma linha por trabalhador;
+  - na versão agregada, o par de hexágonos H3-8 (cerca de 0,7 km²).
+:::
+
+## Estatística descritiva
+
+**Por que a média do ganho por vínculo é tão pequena.** Em cada evento, a grande maioria dos trabalhadores não tem o trajeto alterado: as estações de um evento só mudam os trajetos que passam por elas. A média de todos os vínculos fica, por isso, abaixo de 1 minuto, mesmo quando quem ganhou ganhou bastante.
+
+A tabela separa as duas coisas:
+
+- quantos vínculos ganharam pelo menos 1 minuto;
+- quanto ganharam esses vínculos (média, mediana e percentil 90).
+
+```{r b-desc, results = "asis"}
+gd <- tryCatch(distrib_ganho_par(dd, EV), error = function(e) NULL)
+if (is.null(gd)) em_execucao() else tabela(gd, legenda = "Janela depois da abertura. Ganho de tempo do evento no trajeto de transporte público casa → trabalho, ponderado por vínculos. Média, mediana e percentil 90 calculados entre os vínculos com ganho de pelo menos 1 minuto.")
+```
+
+## Resultados (B1)
+
+::: {.guia}
+**Como estes resultados estão organizados.**
+
+- **O gráfico** mostra o efeito de **10 minutos a menos** no trajeto (trajetos de até 90 min):
+  - uma linha por tipo de desfecho e uma coluna por grupo;
+  - em azul, depois da abertura; em laranja, o placebo; barras de 95%.
+  - Um valor **negativo** em demissão quer dizer **menos** demissões quando o trajeto encurta.
+- **Três abas de trajeto,** no topo:
+  - **trajetos de até 90 minutos** antes do evento (o recorte principal);
+  - **trajetos de mais de 90 minutos**;
+  - **todos os trajetos juntos**, num único coeficiente, sem a separação em 90 minutos.
+- **Dentro de cada aba:** o gráfico, o quadro verde e as tabelas.
+- **As tabelas** têm uma aba por tipo de desfecho, na ordem: demissão (total), demissão sem justa causa, demissão com justa causa, pedido de demissão, qualquer desligamento, permanência no emprego e fração dos meses empregado.
+  - Em cada aba, as linhas são os grupos.
+  - As colunas seguem o tempo (6, 12, 18 e 24 meses), com depois e placebo lado a lado.
+- **Na aba "todos os trajetos",** há também a versão com o ganho medido em % do tempo de antes. Nessa medida, 10 minutos a menos num trajeto de 30 minutos (33%) pesam mais que 10 minutos a menos num trajeto de 120 (8%).
+:::
+
+```{r b-res, results = "asis", fig.height = 9}
+if (is.null(PAR)) em_execucao() else abas_trajeto(function(trj, nv) {
+	x <- par_trj(PAR, trj)
+	segs <- intersect(c("todos", "mulheres", "homens"), unique(x$segmento))
+	graf_par(PAR, segs, trj)
+	y <- x[segmento %in% segs & outcome %in% OC_B]
+	if (nrow(y)) {
+		z <- pareia(y, c("segmento", "outcome"))
+		z <- merge(z, unique(y[janela == "pos", .(segmento, outcome, media = media_y)], by = c("segmento", "outcome")), by = c("segmento", "outcome"), all.x = TRUE)
+		z <- z[order(match(segmento, SEGS), match(outcome, OC_B))]
+		texto_resultados(z, por = "Cada 10 minutos a menos no trajeto",
+			intro = paste0("Recorte: ", TERMOS_TRJ[[trj]]$rot, if (trj == "todos") " (um único coeficiente para todos os trajetos)" else " antes do evento",
+				". Para dar a escala, cada efeito é comparado com a média do desfecho no grupo."))
+	}
+	tabelas_par_categoria(PAR, TERMOS_TRJ[[trj]]$mA, TERMOS_TRJ[[trj]]$tr, nivel = nv,
+		legenda = paste0("Efeito de 10 minutos a menos no trajeto (", TERMOS_TRJ[[trj]]$rot, "), em pontos percentuais."))
+	if (trj == "todos" && nrow(PAR[modelo == "P"])) {
+		abre("Todos os trajetos, com o ganho em % do tempo de antes (por um trajeto 10% mais curto)")
+		tabelas_par_categoria(PAR, "P", "trajeto, sem divisão (por 10% do tempo)", nivel = nv)
+		fecha()
+	}
+}, disponivel = function(trj) nrow(par_trj(PAR, trj)) > 0)
+```
+
+## Diferenças entre grupos
+
+::: {.caixa}
+#### Os grupos e as diferenças
+
+- **Os grupos** são os mesmos do desenho A (sexo, idade, criança de 0 a 5 anos na família e o cruzamento de sexo com criança), mais o **tempo de vínculo** no mês de referência: até 12 meses ou mais de 12 meses.
+- **O efeito em cada grupo** está nas tabelas de resultados acima (uma linha por grupo).
+- **A diferença** entre dois grupos é o efeito no primeiro menos o efeito no segundo:
+  - as duas estimativas vêm de um único modelo em que cada grupo tem o próprio efeito;
+  - o erro-padrão da diferença leva em conta que os grupos dividem os mesmos bairros.
+- **Como ler:** uma diferença significativa quer dizer que o efeito de encurtar o trajeto é, de fato, maior num grupo que no outro. Já a significância em um grupo e não no outro, sozinha, não prova isso.
+:::
+
+::: {.guia}
+**Como esta parte está organizada.**
+
+- Há uma aba para cada recorte de trajeto (até 90 minutos, mais de 90 minutos e todos juntos).
+- Em cada aba:
+  - primeiro, um quadro com os grupos em que o efeito é significativo;
+  - depois, um quadro com as diferenças significativas e quantas seriam esperadas por acaso;
+  - por fim, as tabelas das diferenças, uma aba por tipo de desfecho.
+:::
+
+```{r b-ct, results = "asis"}
+if (is.null(PAR)) em_execucao() else abas_trajeto(function(trj, nv) {
+	tt <- TERMOS_TRJ[[trj]]
+	texto_segmentos(par_trj(PAR, trj), c("demissao_6", "demissao_12", "sem_justa_6", "justa_6", "pedido_6", "empregado_12"), pcol = "p_perm",
+		intro = paste0("Efeito de 10 minutos a menos no trajeto (", tt$rot, "), depois da abertura, em cada grupo."))
+	ct <- prepara_ct_par(PAR_CT, tt$mA, tt$tr)
+	if (is.null(ct) || !nrow(ct)) em_execucao("diferenças entre grupos: são gravadas ao fim de cada rodada por grupo") else {
+		texto_contrastes(ct, por = "de 10 minutos a menos no trajeto")
+		tabs_contrastes(ct, CAT_PAR, nivel = nv)
+	}
+}, disponivel = function(trj) nrow(par_trj(PAR, trj)) > 0)
+```
+
+## Trajeto e acessibilidade na mesma regressão (B2)
+
+::: {.guia}
+**O que o B2 pergunta.** O efeito vem do **próprio trajeto** ou da **facilidade de chegar a outros empregos**? Os dois ganhos costumam vir juntos, porque a mesma estação encurta o trajeto e aproxima outros empregos. Estimando os dois na mesma regressão, cada coeficiente mede o seu canal com o outro fixo.
+
+**Como ler as tabelas.**
+
+- Há uma aba para cada recorte de trajeto (até 90 minutos, mais de 90 minutos e todos juntos).
+- Dentro de cada uma, há uma aba por tipo de desfecho, e as linhas são os grupos.
+- As colunas mostram, lado a lado em cada horizonte, o efeito de **10 minutos a menos no trajeto** e o de **+10% de acessibilidade a partir de casa**, depois da abertura.
+:::
+
+```{r b-mb, results = "asis"}
+if (is.null(PAR)) em_execucao() else abas_trajeto(function(trj, nv) {
+	texto_b2(PAR[segmento %in% c("todos", "mulheres", "homens")], trj)
+	tabelas_b2(PAR, trj, nivel = nv)
+}, disponivel = function(trj) nrow(PAR[modelo == TERMOS_TRJ[[trj]]$md & termo == TERMOS_TRJ[[trj]]$tr]) > 0)
+```
+
+## Robustez
+
+::: {.guia}
+**Para que serve esta parte.** Cada teste muda uma escolha do desenho principal e confere se a queda nas demissões se mantém. Cada bloco explica o objetivo do teste e como lê-lo. Mostramos sobretudo a demissão (e, em alguns testes, o pedido de demissão), que é onde está o resultado principal.
+:::
+
+#### Unidade de análise e comparação entre vizinhos
+
+Cada linha muda uma escolha da especificação principal:
+
+- **Principal:**
+  - unidade: par casa H3-9 × trabalho H3-9;
+  - compara vizinhos de casa e de trabalho (células H3-7) no mesmo evento.
+- **Agregado em H3-8:**
+  - pares de hexágonos maiores (cerca de 0,7 km²);
+  - **objetivo:** reduzir o erro de localização.
+- **Vizinhança menor:**
+  - células H3-8 de casa e de trabalho;
+  - **objetivo:** comparar trabalhadores ainda mais parecidos.
+- **Só vizinhança de casa:**
+  - tira o efeito fixo do bairro de trabalho;
+  - **objetivo:** ver se o bairro do emprego importa.
+- **Sem comparação por bairro:**
+  - só o evento;
+  - **objetivo:** mostrar quanto a comparação por bairro muda o resultado.
+- **Com pares de tempo zero:**
+  - inclui quem mora e trabalha no mesmo hexágono, que a principal deixa de fora;
+  - **objetivo:** ver se essa exclusão importa.
+
+```{r b-rob, results = "asis"}
+if (!is.null(PAR)) {
+	d <- PAR[modelo == "A" & termo == "trajeto, até 90" & segmento %in% c("todos", "mulheres", "homens") & categoria(outcome) %in% c("demissao", "sem_justa", "pedido")]
+	d[, espec := especificacao_par(nivel, fe, arquivo)]
+	d <- unique(d, by = c("espec", "segmento", "outcome", "janela"))
+	d[, `:=`(c = cel(efeito, ep, p_perm), linha = paste0(espec, " · ", segmento))]
+	ordl <- as.vector(t(outer(ESPEC_PAR, c("todos", "mulheres", "homens"), paste, sep = " · ")))
+	tabs_categoria(d, CAT_PAR[c("demissao", "sem_justa", "pedido")], "linha", "Especificação · grupo", ordem = ordl, legenda = "B1, efeito de 10 minutos a menos (trajetos de até 90 min), em p.p.")
+	y <- d[janela == "pos" & outcome %in% c("demissao_6", "demissao_12")]
+	if (nrow(y)) {
+		corpo <- character(0)
+		for (o in c("demissao_6", "demissao_12")) for (s in intersect(c("todos", "mulheres", "homens"), unique(y$segmento))) {
+			z <- y[segmento == s & outcome == o][order(match(espec, ESPEC_PAR))]
+			if (nrow(z)) corpo <- c(corpo, frase_variantes(z[, .(versao = fifelse(espec == ESPEC_PAR[1], "principal", sub(" \\(.*", "", espec)), b = efeito, p = p_perm)],
+				paste0(maiuscula(desf_txt(o)), ", ", tolower(rot_grupo(s))), d = 2))
+		}
+		html_leitura("O que este teste mostra (depois da abertura)", corpo)
+	}
+}
+```
+
+```{r b-rob2, results = "asis"}
+if (is.null(ROB_P)) em_execucao("controle de outras aberturas, faixas de ganho, quintis, dose única e retirada de um evento por vez") else {
+	leitura_rob_par(ROB_P)
+	robustez_par_texto(ROB_P)
+	cat("\n#### Retirando um evento por vez\n\n",
+		"**Objetivo.** Verificar se o resultado depende de uma única abertura.\n\n",
+		"**Como é feito.** Reestimamos o efeito sem um dos eventos de cada vez.\n\n",
+		"**Como ler o gráfico.** Cada ponto é o efeito sem o evento indicado; a linha tracejada é o efeito com todos os eventos. Pontos próximos da linha indicam que nenhum evento sozinho dirige o resultado.\n\n", sep = "")
+}
+```
+
+```{r b-loo, fig.height = 5}
+if (!is.null(ROB_P)) graf_loo_par(ROB_P)
+```
+
+## Conclusão do desenho B
+
+```{r b-conclusao, results = "asis"}
+conclusao_b(PAR, PCT, ROB_P)
+```
+
+# C. Quem pediu demissão {#c}
+
+::: {.guia}
+**Em uma frase.** Para quem pediu demissão, olhamos o que veio depois e perguntamos se a estação mudou esse destino: um emprego mais perto, um salário maior, um emprego novo rápido, ou nenhum emprego formal.
+
+**Como esta seção está organizada.**
+
+1. **A pergunta e como os destinos são classificados.**
+2. **Para onde vai quem pede demissão:** a situação típica, sem efeito da estação.
+3. **O efeito da estação sobre cada destino:** um gráfico e um quadro de leitura.
+4. **Uma comparação descritiva:** quem pediu demissão tinha tido um ganho maior?
+:::
+
+## A pergunta e a estratégia
+
+::: {.caixa}
+#### O que queremos saber
+
+O desenho B diz se, com o trajeto mais curto, as pessoas pedem mais ou menos demissão. Aqui perguntamos **o que acontece com quem pede demissão**:
+
+- vai para um emprego mais perto de casa?
+- vai para um emprego que paga mais?
+- arruma outro emprego rápido?
+- ou sai do emprego formal?
+
+A ideia é testar uma explicação: o trajeto mais curto, ou a facilidade de chegar a outros empregos, permitiria trocar de emprego para melhor.
+:::
+
+::: {.caixa}
+#### Como cada pedido de demissão é classificado
+
+Para cada pessoa que pediu demissão até h meses depois do mês de referência, procuramos na RAIS o **primeiro emprego formal novo** (vínculo celetista em outra empresa) que começa até 12 meses depois do pedido. Cada pedido recebe uma classificação em três dimensões:
+
+1. **Trajeto do novo emprego.** O trajeto de transporte público casa → novo trabalho:
+   - é **mais curto** que o do emprego anterior;
+   - **não é mais curto**;
+   - não pode ser medido, porque o novo emprego **não tem local** geocodificado;
+   - ou **não há emprego formal novo** em 12 meses.
+2. **Salário.** O salário real do novo emprego é **pelo menos 5% maior** que o do anterior, ou **não é maior**. (Ou não há emprego novo.)
+3. **Rapidez.** O novo emprego começa **em até 3 meses** ou **entre 4 e 12 meses** depois do pedido. (Ou não há emprego novo.)
+
+Dentro de cada dimensão, as categorias somam o total de pedidos de demissão.
+
+"Sem emprego formal novo" junta três situações que a RAIS não permite separar:
+
+- quem foi para o trabalho informal;
+- quem ficou desempregado;
+- quem saiu da força de trabalho.
+:::
+
+::: {.caixa}
+#### Como o efeito é estimado
+
+Usamos o modelo B2 do desenho B, com as mesmas hipóteses, trocando o desfecho:
+
+- em vez de "pediu demissão", o desfecho é, por exemplo, "pediu demissão **e** foi para um emprego mais perto" ou "pediu demissão **e** não arrumou emprego formal";
+- como as categorias somam o total, os efeitos também somam o efeito sobre o pedido de demissão;
+- assim, dá para ver **de onde vem** qualquer mudança nos pedidos.
+
+**Como ler.** Se o trajeto mais curto levasse as pessoas a trocar de emprego para melhor, o efeito seria positivo em "novo emprego com trajeto mais curto" ou em "salário maior".
+:::
+
+## Para onde vai quem pede demissão
+
+A tabela descreve a situação típica, não o efeito da estação (janela depois da abertura, trajetos de até 90 minutos, pedidos de demissão em até 12 meses).
+
+- A primeira linha mostra quantos vínculos terminaram em pedido de demissão.
+- As demais mostram, de cada 100 pedidos, quantos foram para cada destino. Cada dimensão soma 100.
+
+```{r c-comp, results = "asis"}
+tem_dest <- function(trj) !is.null(PAR) && nrow(PAR[grepl("^ped_", outcome) & modelo == TERMOS_TRJ[[trj]]$md & termo == TERMOS_TRJ[[trj]]$tr]) > 0
+if (is.null(PAR) || !nrow(PAR[grepl("^ped_", outcome)])) em_execucao() else abas_trajeto(function(trj, nv) composicao_destinos(PAR, trj = trj), disponivel = tem_dest)
+```
+
+## Efeito sobre cada destino
+
+**O que o gráfico mostra.** O efeito, em pontos percentuais, sobre a chance de pedir demissão **e** ir para cada destino, em até 12 meses (modelo B2, depois da abertura), com uma aba para cada recorte de trajeto.
+
+- Painel da esquerda: efeito de **10 minutos a menos no trajeto**.
+- Painel da direita: efeito de **+10% de acessibilidade a partir de casa**.
+- Cada bloco é uma dimensão; a primeira linha é o total de pedidos.
+- Barras que cruzam o zero indicam efeito não distinguível de zero.
+
+```{r c-fig, results = "asis", fig.height = 8}
+if (!is.null(PAR) && nrow(PAR[grepl("^ped_", outcome)])) abas_trajeto(function(trj, nv) {
+	tt <- TERMOS_TRJ[[trj]]
+	graf_destinos(PAR, segs = intersect(c("todos", "mulheres", "homens"), unique(PAR$segmento)), trj = trj)
+	s0 <- intersect(c("todos", "mulheres", "homens"), unique(PAR[grepl("^ped_", outcome) & modelo == tt$md, segmento]))
+	x <- unique(PAR[nivel == "h39" & fe == "casa7trab7" & modelo == tt$md & termo == tt$tr & segmento %in% s0 & outcome %in% paste0(DEST$oc, "_12")],
+		by = c("segmento", "outcome", "janela"))
+	if (nrow(x)) {
+		y <- pareia(x, c("segmento", "outcome"))
+		y <- merge(y, unique(x[janela == "pos", .(segmento, outcome, media = media_y)], by = c("segmento", "outcome")), by = c("segmento", "outcome"), all.x = TRUE)
+		y <- y[order(match(segmento, SEGS), match(categoria(outcome), DEST$oc))]
+		texto_resultados(y, por = "Cada 10 minutos a menos no trajeto",
+			intro = paste0("Modelo B2, ", tt$rot, ", pedidos de demissão em até 12 meses. Cada destino é comparado com a sua própria frequência média."))
+	}
+}, disponivel = tem_dest)
+```
+
+## Quem pediu demissão tinha tido um ganho maior?
+
+::: {.caixa}
+**O que é esta comparação.** É uma comparação descritiva, não um efeito causal.
+
+**Como é feita.**
+
+- Para cada grupo (quem não pediu demissão e quem pediu e foi para cada destino), calculamos o **ganho inesperado** médio.
+- O ganho inesperado é o ganho realizado menos o ganho esperado pelos sorteios das datas: a mesma quantidade que o B&H usa para identificar o efeito.
+- Fazemos isso para o trajeto (em minutos) e para a acessibilidade a partir de casa (em %).
+
+**Como ler.**
+
+- Suponha que quem pediu demissão para ir a um emprego mais perto tivesse tido, em média, um ganho inesperado maior do que quem não pediu. Isso seria coerente com a explicação da troca de emprego.
+- Valores perto de zero indicam que os grupos tiveram, em média, o ganho que seria esperado só pela localização.
+:::
+
+```{r c-desc, results = "asis", fig.height = 5.5}
+if (!is.null(PAR_DESC)) abas_trajeto(function(trj, nv) {
+	graf_ganho_destino(PAR_DESC, trj = trj)
+	texto_ganho_destino(PAR_DESC, trj = trj)
+}, disponivel = function(trj) nrow(PAR_DESC[trajeto == TRJ_ROT[[trj]]]) > 0)
+```
+
+## Conclusão do desenho C
+
+```{r c-conclusao, results = "asis"}
+conclusao_c(PAR, PAR_DESC)
+```
+
+# D. IPTW {#d}
+
+::: {.guia}
+**Em uma frase.** Comparamos quem teve um ganho numa faixa (por exemplo, 10 minutos ou mais no trajeto) com quem quase não ganhou nada no mesmo evento, dando mais peso aos que não ganharam mas se parecem com os que ganharam, para que os dois grupos fiquem iguais nas características de antes da abertura.
+
+**Como esta seção está organizada.**
+
+1. **Estratégia:** o problema, a ideia dos pesos (para quem nunca viu IPTW), o passo a passo, o que o efeito significa e como conferir se os pesos funcionaram (o "balanço").
+2. **Tempo de viagem (vínculos):**
+   - o balanço;
+   - o quadro de leitura;
+   - os resultados, com uma aba por faixa de ganho e, dentro dela, uma aba por desfecho, com o efeito em cada grupo e as diferenças entre grupos logo abaixo.
+3. **Área (pessoas):** o mesmo, para cada indicador de acessibilidade.
+:::
+
+## Estratégia de identificação
+
+::: {.caixa}
+#### O problema
+
+Uma forma direta de medir o efeito é comparar quem teve um ganho grande com quem praticamente não teve ganho, no mesmo evento. O problema é que esses dois grupos podem ser diferentes desde antes:
+
+- quem ganha mora mais perto das linhas novas;
+- tende a ter outra idade, outro histórico de emprego e outro bairro.
+
+Se a diferença no emprego vier dessas características, e não da estação, a comparação simples erra.
+:::
+
+::: {.caixa}
+#### A ideia dos pesos (IPTW), para quem nunca viu
+
+IPTW quer dizer *ponderação pelo inverso da probabilidade de tratamento*.
+
+**Um exemplo.**
+
+- Imagine 100 tratados (ganharam 10 minutos ou mais) e 1.000 controles (não ganharam nada).
+- Os tratados são mais jovens e moram mais perto do centro que a média dos controles.
+- Uma média simples dos controles representaria mal "o que teria acontecido com os tratados sem a estação".
+
+**O que o IPTW faz.**
+
+1. **Estima o escore de propensão.** Para cada pessoa, estima a chance de ela ser tratada a partir das características que ela tinha **antes** da abertura.
+2. **Dá peso aos controles.**
+   - Um controle com chance alta (ele "parece" um tratado: jovem, perto do centro) recebe **peso grande**.
+   - Um controle com chance baixa (não se parece com nenhum tratado) recebe **peso pequeno**.
+3. **Compara.** Depois dos pesos, o grupo de controles fica com a mesma composição dos tratados (mesma idade média, mesma parcela de mulheres, mesmo histórico de emprego...). Só então comparamos os desfechos.
+:::
+
+::: {.caixa}
+#### Como a comparação é feita, passo a passo
+
+1. **Tratados e controles.** Em cada evento, os tratados são as pessoas (ou vínculos) com ganho numa faixa:
+   - na área: ganho de 1 a 5%, de 5 a 20% ou de 20% ou mais sobre a acessibilidade de antes, em cada indicador;
+   - no tempo de viagem: ganho de 1 a 5, de 5 a 10 ou de 10 minutos ou mais.
+   - Os controles têm ganho abaixo de 1% (ou de 1 minuto).
+2. **Janela limpa.** Tratados e controles não podem ter ganho de nenhuma outra abertura entre a referência do placebo e 24 meses depois da referência, para não misturar efeitos de aberturas diferentes.
+3. **Escore de propensão.** Um logit, estimado por evento e faixa, dá a probabilidade de ser tratado. As características usadas são todas anteriores à abertura:
+   - pessoa: idade, sexo, criança na família, raça, deficiência, alfabetização, anos desde a atualização do cadastro;
+   - emprego antes da abertura;
+   - lugar: acessibilidade de antes, distância ao centro e características do Censo 2010 da área (renda, aglomerado subnormal, densidade, esgoto, pavimentação);
+   - no tempo de viagem, também o salário, o tempo de vínculo, o tempo do trajeto e a distância do trabalho ao centro.
+4. **Pesos.** Os controles recebem peso p/(1 − p), em que p é a probabilidade estimada: os que se parecem com tratados pesam mais. O efeito estimado é o **efeito médio nos tratados** (ATT).
+   - **Corte dos pesos extremos.** Em cada evento, nenhum controle pode pesar mais que o percentil 99 dos pesos dos controles daquele evento. Sem esse corte, em alguns eventos uns poucos controles, quase idênticos aos tratados, recebiam pesos enormes e carregavam a comparação sozinhos (ver o diagnóstico na parte de tempo de viagem, abaixo).
+5. **Duplamente robusto.** Além dos pesos, a regressão do desfecho inclui as mesmas características e o evento. O resultado fica certo se o escore **ou** a regressão estiverem bem especificados.
+6. **Inferência.** Erro-padrão agrupado por célula de cerca de 5 km² (vizinhos sofrem choques parecidos), tratando os pesos como dados.
+7. **Placebo.** A mesma comparação com a referência 25 meses antes da primeira abertura.
+:::
+
+::: {.caixa}
+#### O que o efeito significa (e por que ele é maior que no B&H)
+
+O efeito do IPTW é a diferença no desfecho entre os tratados de uma faixa e os controles reponderados, em p.p.
+
+- **No IPTW,** é o efeito de **estar na faixa** (por exemplo, ganhar 10 minutos ou mais) contra não ganhar nada.
+- **No B&H (desenhos A e B),** é o efeito **por unidade** de ganho (por exemplo, por 10 minutos).
+
+Por isso os números do IPTW tendem a ser maiores e não são diretamente comparáveis aos do B&H.
+:::
+
+::: {.caixa}
+#### Como saber se os pesos funcionaram: o "balanço" e a diferença padronizada
+
+O IPTW só funciona se, depois dos pesos, tratados e controles ficarem parecidos. Para conferir, usamos a **diferença padronizada** de cada característica.
+
+**O que ela é.**
+
+- É a diferença entre a média dos tratados e a média dos controles, dividida pelo desvio-padrão da característica.
+- A divisão põe todas as características na mesma escala. Assim, "2 anos de idade a mais" e "5 pontos percentuais a mais de mulheres" podem ser comparados.
+
+**Como ler.**
+
+- 0 quer dizer grupos idênticos naquela característica.
+- Abaixo de **0,1**, a diferença é considerada pequena; essa é a regra usual.
+- Acima de 0,25, a diferença é grande.
+
+**O que a tabela de balanço mostra.**
+
+- A **maior** dessas diferenças entre todas as características, antes e depois dos pesos.
+- Se a maior diferença depois dos pesos está abaixo de 0,1, os grupos ficaram parecidos em **todas** as características medidas.
+- A tabela também mostra os **controles efetivos**: com pesos muito desiguais, poucos controles carregam a comparação, e ela fica menos precisa.
+:::
+
+::: {.caixa}
+#### O que precisa ser verdade (hipóteses)
+
+1. **Seleção nas observáveis.** Depois de igualar as características medidas, quem ganhou e quem não ganhou não diferem em nada que afete o emprego.
+   - É uma hipótese **mais forte** que a do B&H, porque não usa a sorte do calendário.
+   - Diferenças não medidas (por exemplo, o tipo de empresa) podem enviesar o resultado.
+2. **Sobreposição.** Para cada tratado há controles parecidos, de modo que os pesos não explodem.
+3. **Janela limpa e sem antecipação.** O placebo testa a antecipação.
+:::
+
+## Tempo de viagem
+
+#### Diagnóstico do balanço e a correção adotada
+
+::: {.caixa}
+**O que aconteceu.** Na primeira estimação, sem corte nos pesos, o balanço foi ruim. A investigação mostrou que o problema vinha de três eventos (13, 14 e 19):
+
+- nesses eventos, o escore de propensão quase separava tratados e controles;
+- poucos controles, com escore perto de 1, ficavam com pesos enormes (no evento 13, os 10 maiores pesos somavam 64% do peso de todos os controles);
+- com isso, a comparação passava a depender de umas poucas pessoas, e a renda do bairro (Censo 2010) ficava muito diferente entre os grupos depois dos pesos.
+
+**O que testamos.** Quatro correções, no ganho de 10 minutos ou mais e no de 5 a 10 minutos (trajetos de até 90 minutos), depois da abertura e no placebo:
+
+1. cortar os pesos dos controles no percentil 99 de cada evento;
+2. tirar quem tem escore acima de 0,9 (tratados e controles);
+3. usar como controles só quem mora no mesmo bairro (célula H3-7) de algum tratado do evento, reestimando o escore;
+4. usar só quem mora e trabalha nos mesmos bairros de algum tratado.
+
+**O que adotamos.** O corte no percentil 99 (versão 1): é a correção que deixa os grupos parecidos e mantém o maior número de controles efetivos. As demais versões ficam como robustez.
+:::
+
+```{r d-diag, results = "asis"}
+diagnostico_iptw()
+```
+
+```{r d-par-bal, results = "asis"}
+if (!is.null(IPTW_P_BAL)) {
+	cat("\n#### Balanço da versão adotada: os pesos deixaram tratados e controles parecidos?\n\n")
+	balanco_tabela(IPTW_P_BAL[nivel == "ind"], ROT_FAIXA_P)
+	leitura_balanco(IPTW_P_BAL[nivel == "ind" & segmento == "todos"], ROT_FAIXA_P)
+} else em_execucao("IPTW refeito com o corte dos pesos: balanço")
+```
+
+#### Resultados
+
+::: {.guia}
+**Como estes resultados estão organizados.**
+
+- **Abas do primeiro nível: o recorte de trajeto** — até 90 minutos, mais de 90 minutos e todos os trajetos juntos.
+- **Abas do segundo nível: a faixa de ganho.** A principal é "10 min ou mais", onde o ganho é grande o bastante para mudar a rotina.
+- **Abas do terceiro nível: o tipo de desfecho.**
+- **Em cada aba:**
+  - a tabela do efeito em cada grupo (linhas) e horizonte (colunas, com o placebo ao lado);
+  - logo abaixo, as diferenças entre grupos.
+- Base individual. A versão agregada em H3-8 (trajetos de até 90 minutos) está no bloco que abre e fecha, no fim.
+:::
+
+```{r d-par, results = "asis"}
+if (is.null(IPTW_P)) em_execucao() else {
+	abas_trajeto(function(trj, nv) {
+		tr <- TRJ_ROT[[trj]]
+		x <- unique(IPTW_P[nivel == "ind" & trajeto == tr & faixa == "f10mais" & segmento %in% c("todos", "mulheres", "homens") & outcome %in% OC_B], by = c("segmento", "outcome", "janela"))
+		if (nrow(x)) {
+			y <- pareia(x, c("segmento", "outcome"), "att", "ep", "p")
+			y <- merge(y, unique(x[janela == "pos", .(segmento, outcome, media = media_tratados - att)], by = c("segmento", "outcome")), by = c("segmento", "outcome"), all.x = TRUE)
+			y <- y[order(match(segmento, SEGS), match(outcome, OC_B))]
+			texto_resultados(y, por = "Ganhar 10 minutos ou mais no trajeto, em comparação com controles reponderados,",
+				intro = paste0(maiuscula(TERMOS_TRJ[[trj]]$rot), ", ganho de 10 minutos ou mais. A média de comparação é a dos tratados sem o efeito (média dos tratados menos o efeito). Leia junto com o balanço, acima."))
+		}
+		ct <- if (!is.null(IPTW_P_CT)) IPTW_P_CT[nivel == "ind" & trajeto == tr] else NULL
+		if (!is.null(ct) && nrow(ct)) texto_contrastes(ct[faixa == "f10mais"], por = "de ganhar 10 minutos ou mais", titulo = "O que as diferenças entre grupos mostram (ganho de 10 min ou mais)")
+		tabs_por_faixa(IPTW_P[nivel == "ind" & trajeto == tr], ct, c("f10mais", "f5a10", "f1a5"), ROT_FAIXA_P, CAT_PAR, "att", "ep", "p",
+			legenda = "Efeito médio nos tratados da faixa, em pontos percentuais.", nivel = nv)
+	}, disponivel = function(trj) nrow(IPTW_P[nivel == "ind" & trajeto == TRJ_ROT[[trj]]]) > 0)
+	if (nrow(IPTW_P[nivel == "h38"])) {
+		abre("Versão agregada em H3-8 (trajetos de até 90 minutos)")
+		cat("Mesma comparação com pares de hexágonos H3-8 (cerca de 0,7 km²) em vez de pessoas. Serve para conferir que o resultado não depende da unidade.\n\n")
+		tabs_por_faixa(IPTW_P[nivel == "h38" & trajeto == "até 90"], NULL, c("f10mais", "f5a10", "f1a5"), ROT_FAIXA_P, CAT_PAR, "att", "ep", "p")
+		fecha()
+	}
+}
+```
+
+## Área
+
+::: {.guia}
+**Como esta parte está organizada.**
+
+- Primeiro, o balanço.
+- Depois, o resultado para todas as pessoas: uma aba por desfecho; as linhas são as combinações de indicador e faixa de ganho.
+- Em seguida, os grupos: uma aba por indicador e, dentro dela, uma por desfecho. Em cada aba há uma tabela por faixa de ganho, com as diferenças entre grupos logo abaixo.
+- Base individual; a versão em H3-8 fica no fim, no bloco que abre e fecha.
+:::
+
+```{r d-area, results = "asis"}
+if (is.null(IPTW_A)) em_execucao("IPTW de área, todos os indicadores") else {
+	falta <- setdiff(ORD_CORTE, rot_corte(unique(IPTW_A[nivel == "ind" & janela == "pos", corte])))
+	if (length(falta)) em_execucao(paste0("IPTW de área, base individual: ", paste(falta, collapse = ", ")))
+	if (!is.null(IPTW_A_BAL)) {
+		cat("\n#### Balanço\n\n")
+		balanco_tabela(IPTW_A_BAL[nivel == "ind"], ROT_FAIXA_A)
+		leitura_balanco(IPTW_A_BAL[nivel == "ind" & segmento == "todos"], ROT_FAIXA_A)
+	}
+	cat("\n#### Todas as pessoas\n\n")
+	d <- copy(IPTW_A[nivel == "ind" & segmento == "todos"])
+	d[, versao := paste0(rot_corte(corte), ", ", unname(ROT_FAIXA_A[faixa]))]
+	texto_contagem(d, CAT_AREA, hs = c(12, 24), bcol = "att", pcol = "p", rot = "versao", versoes = "versões (indicador × faixa de ganho)",
+		intro = "Efeito de estar em cada faixa de ganho de acessibilidade, contra quem quase não ganhou, em p.p. (salário em %).")
+	tab_corte_faixa(d, c("f1a5", "f5a20", "f20mais"), ROT_FAIXA_A, CAT_AREA, "att", "ep", "p", legenda = "Efeito médio nos tratados da faixa (p.p.; salário em %).")
+	cat("\n#### Por grupo\n\n")
+	ct <- if (!is.null(IPTW_A_CT)) copy(IPTW_A_CT[nivel == "ind"]) else NULL
+	if (!is.null(ct)) {
+		ct[, versao := paste0(rot_corte(corte), ", ", unname(ROT_FAIXA_A[faixa]))]
+		texto_contrastes(ct, por = "de estar na faixa de ganho", d_dig = 3, escopo = "de indicador, faixa, grupos, desfechos e horizontes")
+	}
+	tabs_por_corte(IPTW_A[nivel == "ind"], ct, c("f1a5", "f5a20", "f20mais"), ROT_FAIXA_A, CAT_AREA, "att", "ep", "p")
+	if (nrow(IPTW_A[nivel == "h38"])) {
+		abre("Versão agregada em H3-8")
+		tab_corte_faixa(IPTW_A[nivel == "h38" & segmento == "todos"], c("f1a5", "f5a20", "f20mais"), ROT_FAIXA_A, CAT_AREA, "att", "ep", "p")
+		fecha()
+	}
+}
+```
+
+## Conclusão do desenho D
+
+```{r d-conclusao, results = "asis"}
+conclusao_d(IPTW_P, IPTW_P_BAL, IPTW_P_CT, IPTW_A)
+```
+
+# E. Controles futuros na mesma faixa {#e}
+
+::: {.guia}
+**Em uma frase.** Comparamos quem ganhou num evento com quem não ganhou nada durante a janela daquele evento, mas vai ter um ganho **da mesma faixa** numa abertura **posterior**: dois grupos que o planejamento escolheu para receber estações, separados só pelo momento.
+
+**Como esta seção está organizada.**
+
+1. **Estratégia:** a ideia, um exemplo com datas, o passo a passo e as hipóteses.
+2. **Amostras:** quantos tratados e quantos controles futuros há em cada faixa.
+3. **Tempo de viagem:** o quadro de leitura e os resultados, com uma aba por faixa de ganho ("todas as faixas" e cada faixa) e uma aba por desfecho; o efeito em cada grupo e, abaixo, as diferenças entre grupos.
+4. **Área:**
+   - todas as pessoas, por indicador e faixa;
+   - depois, os grupos, com uma aba por indicador, uma por desfecho e uma tabela por faixa.
+:::
+
+## Estratégia de identificação
+
+::: {.caixa}
+#### A ideia
+
+Os lugares que recebem estações são escolhidos pelo planejamento, e por isso são diferentes dos que não recebem. Mas quem vai receber uma estação **mais tarde** foi escolhido pelas mesmas razões.
+
+- Essas pessoas são o melhor "gêmeo" de quem recebe agora.
+- A diferença entre os dois grupos é só o momento.
+- O controle precisa ter um ganho futuro **da mesma faixa** do tratado, para que os dois tenham o mesmo "tamanho" de exposição às linhas.
+:::
+
+::: {.caixa}
+#### Um exemplo com datas
+
+Pense num evento com serviço pleno em 2018.
+
+- **Tratado:** uma pessoa cujo ganho de acessibilidade com as estações de 2018 ficou entre 5% e 20%.
+- **Controle:** uma pessoa que **não teve nenhum ganho** de nenhuma abertura durante toda a janela do evento, isto é, da referência do placebo (cerca de 2015–2016) até 24 meses depois da referência (2020). Além disso, o **primeiro ganho** que ela vai ter depois dessa janela também fica entre 5% e 20%.
+
+Esse ganho futuro pode vir de **qualquer abertura posterior à janela**:
+
+- outro evento do próprio período estudado (por exemplo, uma estação com serviço pleno em 2021);
+- as linhas abertas em 2025, que ficam fora dos eventos porque a RAIS acaba em 2025;
+- as obras futuras das Linhas 17, 6 e 2.
+
+Para os eventos mais antigos, os controles vêm sobretudo de eventos posteriores. Para os mais recentes, quase só das linhas de 2025 e das obras futuras.
+:::
+
+::: {.caixa}
+#### Como a comparação é feita, passo a passo
+
+1. **Tratados.** Unidades com ganho do evento numa faixa:
+   - na área: 1–5%, 5–20% ou 20% ou mais, em cada indicador;
+   - no tempo de viagem: 1–5, 5–10 ou 10 minutos ou mais, separado por trajeto de até 90 e de mais de 90 minutos.
+   - Os tratados também não podem ter ganho de outra abertura na janela.
+2. **Controles.** Unidades sem ganho de nenhuma abertura que toque a janela do evento, cujo primeiro ganho futuro cai na mesma faixa.
+3. **Por que essa janela.** Ela vai da referência do placebo até 24 meses depois da referência. Assim, nem os desfechos depois da abertura nem os do placebo dos controles são afetados por alguma abertura.
+4. **Diferença em diferenças empilhada.**
+   - Os desfechos já são variações dentro da pessoa (por exemplo, emprego em ref+h menos emprego em ref; ou ter sido demitido entre ref e ref+h).
+   - Comparamos essas variações entre tratados e controles do **mesmo evento e da mesma faixa** (efeito fixo de grupo × evento × faixa).
+   - Depois juntamos todos os eventos.
+   - "Todas as faixas" junta as três faixas, sempre comparando cada tratado com controles da sua faixa.
+5. **Inferência.** Erro-padrão agrupado por célula de cerca de 5 km².
+6. **Placebo.** A mesma comparação com a referência 25 meses antes da primeira abertura.
+:::
+
+::: {.caixa}
+#### O que precisa ser verdade (hipóteses)
+
+1. **Tendências paralelas.** Sem a abertura, tratados e controles futuros da mesma faixa teriam a mesma evolução do emprego. O placebo testa isso antes da abertura.
+2. **Sem antecipação nos controles.** Os controles ainda não foram afetados pela abertura futura deles. A janela termina antes dela.
+3. **Composição.** Os eventos mais recentes têm poucos controles futuros, o que pesa no erro-padrão.
+:::
+
+::: {.caixa}
+#### O que o efeito significa
+
+É a diferença, em p.p. (salário em %), entre a variação do desfecho dos tratados e a dos controles futuros da mesma faixa. Como no IPTW, é o efeito de **estar na faixa**, e não por unidade de ganho.
+:::
+
+## Amostras
+
+```{r e-amostra, results = "asis"}
+if (is.null(FUT_AM)) em_execucao() else amostra_futuros(FUT_AM)
+```
+
+## Tempo de viagem
+
+::: {.guia}
+**Como estes resultados estão organizados.**
+
+- **Abas do primeiro nível: o recorte de trajeto** — até 90 minutos, mais de 90 minutos e todos os trajetos juntos.
+- **Abas do segundo nível: a faixa de ganho.** "Todas as faixas" é o resultado principal; depois vem cada faixa separada.
+- **Abas do terceiro nível: o tipo de desfecho.**
+- **Em cada aba:**
+  - o efeito em cada grupo (linhas) e horizonte (colunas, com o placebo ao lado);
+  - abaixo, as diferenças entre grupos.
+- Pares H3-9. A versão H3-8 (trajetos de até 90 minutos) está no bloco que abre e fecha, no fim.
+:::
+
+```{r e-par, results = "asis"}
+if (is.null(FUT_P)) em_execucao() else {
+	abas_trajeto(function(trj, nv) {
+		P0 <- FUT_P[nivel == "h39" & trajeto == TRJ_ROT[[trj]]]
+		x <- unique(P0[faixa == "todas" & segmento %in% c("todos", "mulheres", "homens") & outcome %in% OC_B], by = c("segmento", "outcome", "janela"))
+		if (nrow(x)) {
+			y <- pareia(x, c("segmento", "outcome"), "efeito", "ep", "p")
+			y <- merge(y, unique(x[janela == "pos", .(segmento, outcome, media = media_controles)], by = c("segmento", "outcome")), by = c("segmento", "outcome"), all.x = TRUE)
+			y <- y[order(match(segmento, SEGS), match(outcome, OC_B))]
+			texto_resultados(y, por = "Em comparação com quem terá um ganho da mesma faixa mais tarde, ser tratado",
+				intro = paste0("Todas as faixas de ganho juntas, ", TERMOS_TRJ[[trj]]$rot, ". A média de comparação é a dos controles futuros."))
+		}
+		texto_faixas_e(P0)
+		ct <- if (!is.null(FUT_P_CT)) FUT_P_CT[nivel == "h39" & trajeto == TRJ_ROT[[trj]]] else NULL
+		if (!is.null(ct) && nrow(ct)) texto_contrastes(ct[faixa == "todas"], por = "de ser tratado", titulo = "O que as diferenças entre grupos mostram (todas as faixas)")
+		tabs_por_faixa(P0, ct, c("todas", "f1a5", "f5a10", "f10mais"), ROT_FAIXA_P, CAT_PAR, "efeito", "ep", "p",
+			legenda = "Tratados contra controles futuros da mesma faixa, em pontos percentuais.", nivel = nv)
+	}, disponivel = function(trj) nrow(FUT_P[nivel == "h39" & trajeto == TRJ_ROT[[trj]]]) > 0)
+	if (nrow(FUT_P[nivel == "h38"])) {
+		abre("Versão agregada em H3-8 (trajetos de até 90 minutos)")
+		tabs_por_faixa(FUT_P[nivel == "h38" & trajeto == "até 90"], if (!is.null(FUT_P_CT)) FUT_P_CT[nivel == "h38" & trajeto == "até 90"] else NULL,
+			c("todas", "f1a5", "f5a10", "f10mais"), ROT_FAIXA_P, CAT_PAR, "efeito", "ep", "p")
+		fecha()
+	}
+}
+```
+
+## Área (acessibilidade a partir de casa)
+
+::: {.guia}
+**Como estes resultados estão organizados.** Este desenho também foi estimado para a acessibilidade, em todos os indicadores (30, 45, 60 e 90 minutos e gravitacional) e em cada faixa de ganho.
+
+- **Todas as pessoas:**
+  - uma aba por desfecho;
+  - as linhas são as combinações de indicador e faixa de ganho (incluindo "todas as faixas");
+  - as colunas seguem o tempo, com o placebo ao lado.
+- **Por grupo:**
+  - uma aba por indicador e, dentro dela, uma por desfecho;
+  - em cada aba, uma tabela por faixa de ganho, com as diferenças entre grupos logo abaixo.
+:::
+
+```{r e-area, results = "asis"}
+if (is.null(FUT_A)) em_execucao() else {
+	A0 <- FUT_A[nivel == "h39"]
+	cat("\n#### Todas as pessoas\n\n")
+	d <- copy(A0[segmento == "todos"])
+	d[, versao := paste0(rot_corte(corte), ", ", unname(ROT_FAIXA_A[faixa]))]
+	texto_contagem(d[faixa == "todas"], CAT_AREA, hs = c(12, 24), bcol = "efeito", pcol = "p", rot = "versao", versoes = "indicadores (todas as faixas juntas)",
+		intro = "Efeito de ser tratado, contra quem terá um ganho da mesma faixa mais tarde, em p.p. (salário em %). Primeiro com todas as faixas juntas:")
+	texto_contagem(d[faixa != "todas"], CAT_AREA[c("emprego", "entrada")], hs = c(12, 24), bcol = "efeito", pcol = "p", rot = "versao", versoes = "versões (indicador × faixa)",
+		titulo = "E separando por faixa de ganho")
+	tab_corte_faixa(d, c("todas", "f1a5", "f5a20", "f20mais"), ROT_FAIXA_A, CAT_AREA, "efeito", "ep", "p", legenda = "Tratados contra controles futuros da mesma faixa (p.p.; salário em %).")
+	cat("\n#### Por grupo\n\n")
+	ct <- if (!is.null(FUT_A_CT)) copy(FUT_A_CT[nivel == "h39"]) else NULL
+	if (!is.null(ct)) {
+		ct[, versao := rot_corte(corte)]
+		texto_contrastes(ct[faixa == "todas"], por = "de ser tratado", d_dig = 3, escopo = "de indicador, grupos, desfechos e horizontes",
+			titulo = "O que as diferenças entre grupos mostram (todas as faixas, todos os indicadores)")
+	}
+	tabs_por_corte(A0, ct, c("todas", "f1a5", "f5a20", "f20mais"), ROT_FAIXA_A, CAT_AREA, "efeito", "ep", "p")
+	if (nrow(FUT_A[nivel == "h38"])) {
+		abre("Versão agregada em H3-8 (todas as pessoas)")
+		tab_corte_faixa(FUT_A[nivel == "h38" & segmento == "todos"], c("todas", "f1a5", "f5a20", "f20mais"), ROT_FAIXA_A, CAT_AREA, "efeito", "ep", "p")
+		fecha()
+	}
+}
+```
+
+## Conclusão do desenho E
+
+```{r e-conclusao, results = "asis"}
+conclusao_e(FUT_P, FUT_P_CT, FUT_A)
+```
+
+# Conclusão geral {#conclusao}
+
+::: {.guia}
+**O que esta seção faz.** Junta o que os cinco desenhos dizem sobre as duas margens da pergunta: **conseguir** emprego formal (acessibilidade a partir de casa) e **manter** o emprego (trajeto até o próprio trabalho). Os números vêm das próprias estimativas e se atualizam com elas; cada parágrafo indica de que desenho vem cada resultado.
+:::
+
+```{r conclusao-geral, results = "asis"}
+conclusao_geral(AREA, PAR, PCT, FUT_P, FUT_P_CT, FUT_A, IPTW_P, IPTW_P_CT)
+```
